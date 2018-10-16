@@ -879,6 +879,12 @@ dnl -------------------------------- FluidSynth -------------------------------
 MPD_ENABLE_AUTO_PKG(fluidsynth, FLUIDSYNTH, [fluidsynth >= 1.1],
 	[fluidsynth MIDI decoder plugin], [fluidsynth not found])
 
+dnl --------------------------------- lazyusf ---------------------------------
+
+MPD_ENABLE_AUTO_PKG_LIB(lazyusf, LAZYUSF, [liblazyusf libpsflib],
+	lazyusf, usf_get_state_size, [-llazyusf -lpsflib], [],
+	[LazyUSF decoder plugin], [liblazyusf not found])
+
 dnl ---------------------------------- libgme ---------------------------------
 
 MPD_ENABLE_AUTO_PKG_LIB(gme, GME, [libgme],
@@ -1435,6 +1441,7 @@ results(sidplay, [C64 SID])
 results(ffmpeg, [FFMPEG])
 results(flac, [FLAC])
 results(fluidsynth, [FluidSynth])
+results(lazyusf, [LazyUSF])
 results(gme, [GME])
 printf '\n\t'
 results(sndfile, [libsndfile])

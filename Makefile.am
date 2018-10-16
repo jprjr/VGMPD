@@ -1022,7 +1022,8 @@ libdecoder_a_CPPFLAGS = $(AM_CPPFLAGS) \
 	$(FFMPEG_CFLAGS) \
 	$(MPCDEC_CFLAGS) \
 	$(ADPLUG_CFLAGS) \
-	$(FAAD_CFLAGS)
+	$(FAAD_CFLAGS) \
+	$(LAZYUSF_CFLAGS)
 
 DECODER_LIBS = \
 	libdecoder.a \
@@ -1042,7 +1043,8 @@ DECODER_LIBS = \
 	$(FFMPEG_LIBS2) \
 	$(MPCDEC_LIBS) \
 	$(ADPLUG_LIBS) \
-	$(FAAD_LIBS)
+	$(FAAD_LIBS) \
+	$(LAZYUSF_LIBS)
 
 if ENABLE_DSD
 libdecoder_a_SOURCES += \
@@ -1189,6 +1191,11 @@ endif
 if ENABLE_GME
 libdecoder_a_SOURCES += \
 	src/decoder/plugins/GmeDecoderPlugin.cxx src/decoder/plugins/GmeDecoderPlugin.hxx
+endif
+
+if ENABLE_LAZYUSF
+libdecoder_a_SOURCES += \
+	src/decoder/plugins/LazyusfDecoderPlugin.cxx src/decoder/plugins/LazyusfDecoderPlugin.hxx
 endif
 
 # encoder plugins
