@@ -27,6 +27,7 @@
 #include "tag/TagBuilder.hxx"
 #include "fs/Path.hxx"
 #include "fs/AllocatedPath.hxx"
+#include "fs/FileSystem.hxx"
 #include "util/ScopeExit.hxx"
 #include "util/StringFormat.hxx"
 #include "util/UriUtil.hxx"
@@ -104,18 +105,39 @@ ParseContainerPath(Path path_fs)
 	return { path_fs.GetDirectoryName(), track - 1 };
 }
 
+static Music_Emu *LoadGmeAndM3u(GmeContainerPath container) {
+
+	const char *container_path = container.path.c_str();
+	const char *container_suffix = uri_get_suffix(container_path);
+	unsigned int basename_len = container_suffix - container_path;
+
+	Music_Emu *emu;
+	const char *gme_err =
+		gme_open_file(container_path, &emu, GME_SAMPLE_RATE);
+	if (gme_err != nullptr) {
+		LogWarning(gme_domain, gme_err);
+		return nullptr;
+	}
+        if(container_suffix != nullptr) {
+		std::string m3u_path(container_path,basename_len);
+		m3u_path += "m3u";
+		if(FileExists(Path::FromFS(m3u_path.c_str()))) {
+			gme_load_m3u(emu,m3u_path.c_str());
+		}
+		if(gme_err != nullptr) {
+			LogWarning(gme_domain,gme_err);
+		}
+	}
+	return emu;
+}
+
 static void
 gme_file_decode(DecoderClient &client, Path path_fs)
 {
 	const auto container = ParseContainerPath(path_fs);
 
-	Music_Emu *emu;
-	const char *gme_err =
-		gme_open_file(container.path.c_str(), &emu, GME_SAMPLE_RATE);
-	if (gme_err != nullptr) {
-		LogWarning(gme_domain, gme_err);
-		return;
-	}
+	Music_Emu *emu = LoadGmeAndM3u(container);
+        if(emu == nullptr) { return; }
 
 	AtScopeExit(emu) { gme_delete(emu); };
 
@@ -128,7 +150,7 @@ gme_file_decode(DecoderClient &client, Path path_fs)
 #endif
 
 	gme_info_t *ti;
-	gme_err = gme_track_info(emu, &ti, container.track);
+	const char *gme_err = gme_track_info(emu, &ti, container.track);
 	if (gme_err != nullptr) {
 		LogWarning(gme_domain, gme_err);
 		return;
@@ -251,11 +273,8 @@ gme_scan_file(Path path_fs,
 {
 	const auto container = ParseContainerPath(path_fs);
 
-	Music_Emu *emu;
-	const char *gme_err =
-		gme_open_file(container.path.c_str(), &emu, GME_SAMPLE_RATE);
-	if (gme_err != nullptr) {
-		LogWarning(gme_domain, gme_err);
+	Music_Emu *emu = LoadGmeAndM3u(container);
+        if(emu == nullptr) {
 		return false;
 	}
 
@@ -268,12 +287,10 @@ static std::forward_list<DetachedSong>
 gme_container_scan(Path path_fs)
 {
 	std::forward_list<DetachedSong> list;
+	const auto container = ParseContainerPath(path_fs);
 
-	Music_Emu *emu;
-	const char *gme_err = gme_open_file(path_fs.c_str(), &emu,
-					    GME_SAMPLE_RATE);
-	if (gme_err != nullptr) {
-		LogWarning(gme_domain, gme_err);
+	Music_Emu *emu = LoadGmeAndM3u(container);
+	if(emu == nullptr) {
 		return list;
 	}
 
