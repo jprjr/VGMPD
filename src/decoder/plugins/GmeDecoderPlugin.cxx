@@ -217,17 +217,8 @@ ScanGmeInfo(const gme_info_t &info, unsigned song_num, int track_count,
 				       StringFormat<16>("%u", song_num + 1));
 
 	if (info.song != nullptr) {
-		if (track_count > 1) {
-			/* start numbering subtunes from 1 */
-			const auto tag_title =
-				StringFormat<1024>("%s (%u/%d)",
-						   info.song, song_num + 1,
-						   track_count);
-			tag_handler_invoke_tag(handler, handler_ctx,
-					       TAG_TITLE, tag_title);
-		} else
-			tag_handler_invoke_tag(handler, handler_ctx,
-					       TAG_TITLE, info.song);
+		tag_handler_invoke_tag(handler, handler_ctx,
+				       TAG_TITLE, info.song);
 	}
 
 	if (info.author != nullptr)
