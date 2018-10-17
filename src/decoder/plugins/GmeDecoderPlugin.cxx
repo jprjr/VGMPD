@@ -154,7 +154,7 @@ gme_file_decode(DecoderClient &client, Path path_fs)
 		LogWarning(gme_domain, gme_err);
 
 	if (length > 0)
-		gme_set_fade(emu, length);
+		gme_set_fade(emu, length, 8000);
 
 	/* play */
 	DecoderCommand cmd;
