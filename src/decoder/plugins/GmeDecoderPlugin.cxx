@@ -160,7 +160,7 @@ gme_file_decode(DecoderClient &client, Path path_fs)
 	gme_free_info(ti);
 
 	const SignedSongTime song_len = length > 0
-		? SignedSongTime::FromMS(length)
+		? SignedSongTime::FromMS(length + 8000)
 		: SignedSongTime::Negative();
 
 	/* initialize the MPD decoder */
@@ -210,7 +210,7 @@ ScanGmeInfo(const gme_info_t &info, unsigned song_num, int track_count,
 {
 	if (info.play_length > 0)
 		tag_handler_invoke_duration(handler, handler_ctx,
-					    SongTime::FromMS(info.play_length));
+					    SongTime::FromMS(info.play_length + 8000));
 
 	if (track_count > 1)
 		tag_handler_invoke_tag(handler, handler_ctx, TAG_TRACK,
