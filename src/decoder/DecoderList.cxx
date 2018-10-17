@@ -43,6 +43,7 @@
 #include "plugins/MpcdecDecoderPlugin.hxx"
 #include "plugins/FluidsynthDecoderPlugin.hxx"
 #include "plugins/SidplayDecoderPlugin.hxx"
+#include "plugins/LazyusfDecoderPlugin.hxx"
 #include "util/Macros.hxx"
 
 #include <string.h>
@@ -106,6 +107,9 @@ const struct DecoderPlugin *const decoder_plugins[] = {
 #endif
 #ifdef ENABLE_GME
 	&gme_decoder_plugin,
+#endif
+#ifdef ENABLE_LAZYUSF
+	&lazyusf_decoder_plugin,
 #endif
 	&pcm_decoder_plugin,
 	nullptr
