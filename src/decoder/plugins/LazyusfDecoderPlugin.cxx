@@ -27,6 +27,9 @@ static const char *LazyUSF_separators = "\\/:|";
 
 #define MIN(a,b) (a < b ? a : b)
 
+static int8_t enable_hle;
+static int32_t sample_rate;
+
 /**
  * applies a fade to an audio sample
  */
@@ -128,7 +131,6 @@ struct LazyUSF_TagHolder
 {
 	unsigned int length;
 	unsigned int fade;
-	unsigned int track;
 	unsigned int enable_compare;
 	unsigned int enable_fifo_full;
     const TagHandler &handler;
@@ -158,6 +160,10 @@ LazyUSF_TagHandler(void *context, const char *name, const char *value)
 		{
 			tag_handler_invoke_tag(holder->handler, holder->handler_ctx,
 				TAG_DATE, value);
+		} else if(strcasecmp(name,"track") == 0)
+		{
+			tag_handler_invoke_tag(holder->handler, holder->handler_ctx,
+				TAG_TRACK, value);
 		}
 	}
 
@@ -167,9 +173,6 @@ LazyUSF_TagHandler(void *context, const char *name, const char *value)
 	} else if(strcasecmp(name,"fade") == 0)
 	{
 		holder->fade = ParseUSFTime(value) * 1000;
-	} else if(strcasecmp(name,"track") == 0)
-	{
-		holder->track = ParseUSFTime(value);
 	} else if(strcasecmp(name,"_enablecompare") == 0 && strlen(value)) {
 		holder->enable_compare = 1;
 	} else if(strcasecmp(name,"_enablefifofull") == 0 && strlen(value)) {
@@ -200,7 +203,6 @@ LazyUSF_openfile(void *context, Path path_fs,
 
 	holder->length = 0;
 	holder->fade = 0;
-	holder->track = 0;
 	holder->enable_compare = 0;
 	holder->enable_fifo_full = 0;
 
@@ -215,6 +217,7 @@ LazyUSF_openfile(void *context, Path path_fs,
 
 	usf_set_compare(usf,holder->enable_compare);
 	usf_set_fifo_full(usf,holder->enable_fifo_full);
+	usf_set_hle_audio(usf,enable_hle);
 
 	if(holder->handler_ctx != nullptr)
 	{
@@ -223,12 +226,47 @@ LazyUSF_openfile(void *context, Path path_fs,
 			tag_handler_invoke_duration(holder->handler,holder->handler_ctx,
 					SongTime::FromMS(holder->length + holder->fade));
 		}
-		if(holder->track > 0)
+	}
+
+	return true;
+}
+
+static int
+LazyUSF_ApplyFade(int16_t *buf, int64_t song_samples,
+	int64_t rem_samples, int64_t fade_samples)
+{
+	unsigned int i = 0;
+	if(song_samples > 0)
+	{
+		return 0;
+	}
+
+	for(i = 0 - song_samples; i<LAZYUSF_BUFFER_FRAMES; i++)
+	{
+		if(i > rem_samples)
 		{
-			tag_handler_invoke_tag(holder->handler, holder->handler_ctx, TAG_TRACK,
-					StringFormat<16>("%u",holder->track));
+			buf[i*2] = 0;
+			buf[i*2 + 1] = 0;
+		}
+		else {
+			buf[i*2] = FadeUSFSample(buf[i*2],rem_samples - i - song_samples,fade_samples);
+			buf[i*2 + 1] = FadeUSFSample(buf[i*2 + 1],rem_samples - i - song_samples,fade_samples);
 		}
 	}
+	return LAZYUSF_BUFFER_FRAMES;
+}
+
+static bool
+lazyusf_plugin_init(const ConfigBlock &block)
+{
+	auto hle = block.GetBlockParam("hle");
+	auto sr = block.GetBlockParam("sample_rate");
+	enable_hle = hle != nullptr
+		? (int)hle->GetBoolValue() : 1;
+	sample_rate = sr != nullptr
+		? sr->GetIntValue() : 0;
+	fprintf(stderr,"enable_hle: %d\n",enable_hle);
+	fprintf(stderr,"sample_rate: %d\n",sample_rate);
 
 	return true;
 
@@ -261,31 +299,6 @@ lazyusf_scan_file(Path path_fs,
     return LazyUSF_openfile(usf,path_fs,&holder);
 }
 
-static int
-LazyUSF_ApplyFade(int16_t *buf, int64_t song_samples,
-	int64_t rem_samples, int64_t fade_samples)
-{
-	unsigned int i = 0;
-	if(song_samples > 0)
-	{
-		return 0;
-	}
-
-	for(i = 0 - song_samples; i<LAZYUSF_BUFFER_FRAMES; i++)
-	{
-		if(i > rem_samples)
-		{
-			buf[i*2] = 0;
-			buf[i*2 + 1] = 0;
-		}
-		else {
-			buf[i*2] = FadeUSFSample(buf[i*2],rem_samples - i - song_samples,fade_samples);
-			buf[i*2 + 1] = FadeUSFSample(buf[i*2 + 1],rem_samples - i - song_samples,fade_samples);
-		}
-	}
-	return LAZYUSF_BUFFER_FRAMES;
-}
-
 static void
 lazyusf_file_decode(DecoderClient &client, Path path_fs)
 {
@@ -294,8 +307,8 @@ lazyusf_file_decode(DecoderClient &client, Path path_fs)
 		.handler = add_tag_handler,
 		.handler_ctx = nullptr,
 	};
-	int32_t sample_rate = 0;
 	const char *usf_err = nullptr;
+	int8_t resample = true;
 
 	usf_state_t *usf =
 		(usf_state_t *)malloc(usf_get_state_size());
@@ -317,11 +330,14 @@ lazyusf_file_decode(DecoderClient &client, Path path_fs)
 	}
 
 	/* get sample rate */
-	usf_err = usf_render(usf,nullptr,0,&sample_rate);
-	if(usf_err != nullptr)
-	{
-		LogWarning(lazyusf_domain,usf_err);
-		return;
+    if(sample_rate <= 0) {
+		resample = false;
+		usf_err = usf_render(usf,nullptr,0,&sample_rate);
+		if(usf_err != nullptr)
+		{
+			LogWarning(lazyusf_domain,usf_err);
+			return;
+		}
 	}
 
 	const SignedSongTime song_len = holder.length > 0
@@ -342,7 +358,9 @@ lazyusf_file_decode(DecoderClient &client, Path path_fs)
 
 	do
 	{
-		usf_err = usf_render(usf,buf,LAZYUSF_BUFFER_FRAMES,&sample_rate);
+		usf_err = resample
+		  ? usf_render_resampled(usf,buf,LAZYUSF_BUFFER_FRAMES,sample_rate)
+		  : usf_render(usf,buf,LAZYUSF_BUFFER_FRAMES,&sample_rate);
 		if(usf_err != nullptr)
 		{
 			LogWarning(lazyusf_domain,usf_err);
@@ -377,7 +395,9 @@ lazyusf_file_decode(DecoderClient &client, Path path_fs)
 			}
 
 			while(song_samples > where && song_samples >= 0) {
-				usf_err = usf_render(usf,buf,LAZYUSF_BUFFER_FRAMES,&sample_rate);
+				usf_err = resample
+				  ? usf_render_resampled(usf,buf,LAZYUSF_BUFFER_FRAMES,sample_rate)
+				  : usf_render(usf,buf,LAZYUSF_BUFFER_FRAMES,&sample_rate);
 				if(usf_err != nullptr) {
 					LogWarning(lazyusf_domain,usf_err);
 					return;
@@ -402,7 +422,7 @@ static const char *const lazyusf_suffixes[] = {
 
 const struct DecoderPlugin lazyusf_decoder_plugin = {
 	"lazyusf", /* name */
-	nullptr,   /* init function */
+	lazyusf_plugin_init,   /* init function */
 	nullptr,   /* finish function */
 	nullptr,   /* stream_decode */
 	lazyusf_file_decode,   /* file_decode */
