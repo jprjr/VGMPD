@@ -54,3 +54,20 @@ popd
 ```
 
 From there, you should be able to clone this repo and build as normal.
+
+## Options
+
+You can configure plugin-specific options in your MPD.conf file.
+
+Here's the default settings for lazyusf:
+
+
+```
+decoder {
+    plugin "lazyusf"
+    hle "true"
+    sample_rate "0"
+}
+```
+
+High-level emulation is enabled, and resampling is disabled.
