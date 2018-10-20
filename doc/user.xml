@@ -2673,6 +2673,46 @@ run</programlisting>
         </informaltable>
       </section>
 
+      <section>
+        <title><varname>lazyusf</varname></title>
+
+        <para>
+          USF decoder based on <ulink
+          url="https://bitbucket.org/losnoco/lazyusf"><application>lazyusf</application></ulink>.
+        </para>
+
+        <informaltable>
+          <tgroup cols="2">
+            <thead>
+              <row>
+                <entry>Setting</entry>
+                <entry>Description</entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry>
+                  <varname>hle</varname>
+                  <parameter>yes|no</parameter>
+                </entry>
+                <entry>
+                  Enable high-level emulation (faster, but less accurate). Default: "yes"
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <varname>sample_rate</varname>
+                  <parameter>Integer</parameter>
+                </entry>
+                <entry>
+                  Enable resampling in lazyusf. Default: 0 (no resampling).
+                </entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+      </section>
+
       <section id="mad_decoder">
         <title><varname>mad</varname></title>
 
