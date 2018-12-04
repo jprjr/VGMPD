@@ -35,7 +35,7 @@ git clone -b add-cmakelists https://bitbucket.org/jprjr/lazyusf.git
 mkdir build-gme build-psflib build-lazyusf
 
 pushd build-gme
-cmake -DCMAKE_INSTALL_PREFIX=/usr/local ../game_music_emu
+cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_CXX_FLAGS="-DHAVE_ZLIB_H" -DCMAKE_C_FLAGS="-DHAVE_ZLIB_H" ../game_music_emu
 make
 make install
 popd
