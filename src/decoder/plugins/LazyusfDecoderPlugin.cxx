@@ -265,8 +265,6 @@ lazyusf_plugin_init(const ConfigBlock &block)
 		? (int)hle->GetBoolValue() : 1;
 	sample_rate = sr != nullptr
 		? sr->GetIntValue() : 0;
-	fprintf(stderr,"enable_hle: %d\n",enable_hle);
-	fprintf(stderr,"sample_rate: %d\n",sample_rate);
 
 	return true;
 
