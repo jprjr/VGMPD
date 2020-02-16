@@ -1,7 +1,7 @@
 #include "VgmDecoderPlugin.hxx"
 #include "../DecoderAPI.hxx"
 #include "CheckAudioFormat.hxx"
-#include "fs/Path.hxx"
+#include "input/InputStream.hxx"
 #include "tag/Handler.hxx"
 #include "util/ScopeExit.hxx"
 
@@ -10,7 +10,7 @@
 #include <vgm/player/s98player.hpp>
 #include <vgm/player/droplayer.hpp>
 #include <vgm/utils/DataLoader.h>
-#include <vgm/utils/FileLoader.h>
+#include <vgm/utils/MemoryLoader.h>
 
 #include <cstring>
 
@@ -91,16 +91,44 @@ GetPlayerForFile(DATA_LOADER *loader, PlayerBase** retPlayer) {
 }
 
 static PlayerBase*
-LoadVgm(Path path_fs, DATA_LOADER **out_loader) {
+LoadVgm(InputStream &is, DATA_LOADER **out_loader, uint8_t **out_data) {
 	PlayerBase *player;
-	DATA_LOADER *loader = FileLoader_Init(path_fs.c_str());
-	if(loader == nullptr) return nullptr;
+	DATA_LOADER *loader;
+	size_t size = 0;
+	size_t read = 0;
+	uint8_t *d;
+	uint8_t *t;
+	uint8_t *data = (uint8_t *)malloc(4096);
+	if(data == nullptr) return nullptr;
+	d = &data[size];
+
+	do {
+		read = is.LockRead(d,4096);
+		size += read;
+		if(read == 4096) {
+			t = (uint8_t *)realloc(data,size+4096);
+			if(t == nullptr) {
+				free(data);
+				return nullptr;
+			}
+			data = t;
+			d = &data[size];
+		}
+	} while(read == 4096 && (size + 4096) < ((size_t)(-1)));
+
+	loader = MemoryLoader_Init(data,size);
+	if(loader == nullptr) {
+		free(data);
+		return nullptr;
+	}
 	*out_loader = loader;
+	*out_data = data;
 
 	DataLoader_SetPreloadBytes(loader,0x100);
 	if(DataLoader_Load(loader) || (!GetPlayerForFile(loader,&player))) {
 		DataLoader_CancelLoading(loader);
 		DataLoader_Deinit(loader);
+		free(data);
 		return nullptr;
 	}
 
@@ -109,16 +137,21 @@ LoadVgm(Path path_fs, DATA_LOADER **out_loader) {
 
 
 static void
-vgm_file_decode(DecoderClient &client, Path path_fs)
+vgm_stream_decode(DecoderClient &client, InputStream &is)
 {
 	PlayerBase *player;
 	DATA_LOADER *loader;
-	player = LoadVgm(path_fs,&loader);
+	uint8_t *data;
+	player = LoadVgm(is,&loader,&data);
 	if(player == nullptr) return;
 
 	AtScopeExit(loader) {
 		DataLoader_CancelLoading(loader);
 		DataLoader_Deinit(loader);
+	};
+
+	AtScopeExit(data) {
+		free(data);
 	};
 
 	AtScopeExit(player) {
@@ -180,16 +213,21 @@ vgm_file_decode(DecoderClient &client, Path path_fs)
 }
 
 static bool
-vgm_scan_file(Path path_fs, TagHandler &handler) noexcept
+vgm_scan_stream(InputStream &is, TagHandler &handler) noexcept
 {
 	PlayerBase *player;
 	DATA_LOADER *loader;
-	player = LoadVgm(path_fs,&loader);
+	uint8_t *data;
+	player = LoadVgm(is,&loader,&data);
 	if(player == nullptr) return false;
 
 	AtScopeExit(loader) {
 		DataLoader_CancelLoading(loader);
 		DataLoader_Deinit(loader);
+	};
+
+	AtScopeExit(data) {
+		free(data);
 	};
 
 	AtScopeExit(player) {
@@ -236,10 +274,10 @@ const struct DecoderPlugin vgm_decoder_plugin = {
 	"vgm",
 	nullptr,
 	nullptr,
+	vgm_stream_decode,
 	nullptr,
-	vgm_file_decode,
-	vgm_scan_file,
 	nullptr,
+	vgm_scan_stream,
 	nullptr,
 	vgm_suffixes,
 	nullptr,
