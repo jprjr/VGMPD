@@ -40,6 +40,7 @@
 #include "plugins/MadDecoderPlugin.hxx"
 #include "plugins/SndfileDecoderPlugin.hxx"
 #include "plugins/Mpg123DecoderPlugin.hxx"
+#include "plugins/VgmDecoderPlugin.hxx"
 #include "plugins/WildmidiDecoderPlugin.hxx"
 #include "plugins/MikmodDecoderPlugin.hxx"
 #include "plugins/ModplugDecoderPlugin.hxx"
@@ -111,6 +112,9 @@ const struct DecoderPlugin *const decoder_plugins[] = {
 #endif
 #ifdef ENABLE_GME
 	&gme_decoder_plugin,
+#endif
+#ifdef ENABLE_VGM
+    &vgm_decoder_plugin,
 #endif
 	&pcm_decoder_plugin,
 	nullptr
