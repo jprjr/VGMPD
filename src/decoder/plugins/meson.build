@@ -123,6 +123,29 @@ if libsndfile_dep.found()
   decoder_plugins_sources += 'SndfileDecoderPlugin.cxx'
 endif
 
+# libvgm (currently) just installs static libraries, meaning we
+# need to find dependencies on our own.
+
+# There's three main static libs - player, emu, utils.
+# Utils requires zlib on all platforms.
+# Utils requires iconv on non-Windows. If on Windows, it
+# uses iconv if available, falls back to win32
+
+# Need to check for libiconv on osx, and maybe other platforms.
+
+libvgm_player_dep = c_compiler.find_library('vgm-player', required: get_option('vgm'))
+libvgm_emu_dep = c_compiler.find_library('vgm-emu', required: get_option('vgm'))
+libvgm_utils_dep = c_compiler.find_library('vgm-utils', required: get_option('vgm'))
+libvgm_iconv_dep = c_compiler.find_library('iconv', required: get_option('vgm'))
+libvgm_has_native_iconv = c_compiler.has_function('iconv_open', prefix: '#include <iconv.h>')
+libvgm_has_ext_iconv = c_compiler.has_function('iconv_open', prefix: '#include <iconv.h>', dependencies: [ libvgm_iconv_dep ])
+
+libvgm_found = libvgm_player_dep.found() and libvgm_emu_dep.found() and libvgm_utils_dep.found() and zlib_dep.found() and( is_windows or (libvgm_has_ext_iconv or libvgm_has_native_iconv) )
+conf.set('ENABLE_VGM', libvgm_found)
+if libvgm_found
+  decoder_plugins_sources += 'VgmDecoderPlugin.cxx'
+endif
+
 wavpack_dep = dependency('wavpack', required: get_option('wavpack'))
 decoder_features.set('ENABLE_WAVPACK', wavpack_dep.found())
 if wavpack_dep.found()
@@ -170,11 +193,7 @@ if libsidplay_dep.found()
   decoder_plugins_sources += 'SidplayDecoderPlugin.cxx'
 endif
 
-decoder_plugins = static_library(
-  'decoder_plugins',
-  decoder_plugins_sources,
-  include_directories: inc,
-  dependencies: [
+decoder_dependencies = [
     adplug_dep,
     ffmpeg_dep,
     flac_dep,
@@ -194,7 +213,25 @@ decoder_plugins = static_library(
     ogg_dep,
     wavpack_dep,
     wildmidi_dep,
-  ],
+]
+
+if libvgm_found
+	decoder_dependencies += [
+	  libvgm_emu_dep,
+	  libvgm_player_dep,
+	  libvgm_utils_dep,
+	  zlib_dep,
+	]
+	if libvgm_has_ext_iconv == true and libvgm_has_native_iconv == false
+		decoder_dependencies += [ libvgm_iconv_dep ]
+	endif
+endif
+
+decoder_plugins = static_library(
+  'decoder_plugins',
+  decoder_plugins_sources,
+  include_directories: inc,
+  dependencies: decoder_dependencies,
 )
 
 decoder_plugins_dep = declare_dependency(
