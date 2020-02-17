@@ -14,29 +14,35 @@
 
 #include <cstring>
 
-static constexpr unsigned VGM_SAMPLE_RATE = 44100;
 static constexpr unsigned VGM_CHANNELS = 2;
 static constexpr unsigned VGM_BUFFER_FRAMES = 2048;
 static constexpr unsigned VGM_BUFFER_SAMPLES =
 	VGM_BUFFER_FRAMES * VGM_CHANNELS;
-static constexpr unsigned VGM_FADE_LEN = 8;
+static constexpr signed VGM_MAX_SAMPLE = 8388607;
+static constexpr signed VGM_MIN_SAMPLE = -8388608;
+
+static unsigned vgm_sample_rate;
+static unsigned vgm_bit_depth;
+static unsigned vgm_bit_shift;
+static unsigned vgm_byte_width;
+static unsigned vgm_fade_len;
 
 static void
-FadeSamples(WAVE_32BS *data, unsigned int samples_rem, unsigned int samples_fade, unsigned int sample_count) {
+FadeFrames(WAVE_32BS *data, unsigned int frames_rem, unsigned int frames_fade, unsigned int frame_count) {
     unsigned int i = 0;
-    unsigned int f = samples_fade;
+    unsigned int f = frames_fade;
     double fade;
 
-    if(samples_rem - sample_count > samples_fade) return;
-    if(samples_rem > samples_fade) {
-        i = samples_rem - samples_fade;
+    if(frames_rem - frame_count > frames_fade) return;
+    if(frames_rem > frames_fade) {
+        i = frames_rem - frames_fade;
         f += i;
     } else {
-        f = samples_rem;
+        f = frames_rem;
     }
 
-    while(i<sample_count) {
-        fade = (double)(f-i) / (double)samples_fade;
+    while(i<frame_count) {
+        fade = (double)(f-i) / (double)frames_fade;
         data[i].L *= fade;
         data[i].R *= fade;
         i++;
@@ -46,28 +52,35 @@ FadeSamples(WAVE_32BS *data, unsigned int samples_rem, unsigned int samples_fade
 }
 
 static void
-PackSamples(int16_t *dest, WAVE_32BS *src, unsigned int count) {
+PackFrames(void *dest, WAVE_32BS *src, unsigned int count) {
 	unsigned int i = 0;
 	unsigned int j = 0;
+	int32_t *dest_32 = (int32_t *)dest;
+	int16_t *dest_16 = (int16_t *)dest;
 	while(i<count) {
-		/* output is 24-bit, shift to 16-bit */
-		src[i].L >>= 8;
-		src[i].R >>= 8;
 
 		/* check for clipping */
-		if(src[i].L < -0x8000) {
-			src[i].L = -0x8000;
-		} else if(src[i].L > +0x7FFF) {
-			src[i].L = +0x7FFF;
+		if(src[i].L < VGM_MIN_SAMPLE) {
+			src[i].L = VGM_MIN_SAMPLE;
+		} else if(src[i].L > VGM_MAX_SAMPLE) {
+			src[i].L = VGM_MAX_SAMPLE;
 		}
-		if(src[i].R < -0x8000) {
-			src[i].R = -0x8000;
-		} else if(src[i].R > +0x7FFF) {
-			src[i].R = +0x7FFF;
+		if(src[i].R < VGM_MIN_SAMPLE) {
+			src[i].R = VGM_MIN_SAMPLE;
+		} else if(src[i].R > VGM_MAX_SAMPLE) {
+			src[i].R = VGM_MAX_SAMPLE;
 		}
 
-		dest[j]   = (int16_t)src[i].L;
-		dest[j+1] = (int16_t)src[i].R;
+		src[i].L >>= vgm_bit_shift;
+		src[i].R >>= vgm_bit_shift;
+
+		if(vgm_bit_depth == 16) {
+			dest_16[j]    = (int16_t)src[i].L;
+			dest_16[j+1]  = (int16_t)src[i].R;
+		} else {
+			dest_32[j]    = src[i].L;
+			dest_32[j+1]  = src[i].R;
+		}
 
 		i++;
 		j+=2;
@@ -85,7 +98,7 @@ GetPlayerForFile(DATA_LOADER *loader, PlayerBase** retPlayer) {
 		delete player;
 		return false;
 	}
-	player->SetSampleRate(VGM_SAMPLE_RATE);
+	player->SetSampleRate(vgm_sample_rate);
 	*retPlayer = player;
 	return true;
 }
@@ -135,14 +148,61 @@ LoadVgm(InputStream &is, DATA_LOADER **out_loader, uint8_t **out_data) {
 	return player;
 }
 
+static bool
+vgm_plugin_init(const ConfigBlock &block)
+{
+	auto sample_rate = block.GetBlockParam("sample_rate");
+	auto bit_depth = block.GetBlockParam("bit_depth");
+	auto fade_len = block.GetBlockParam("fade_len");
+
+	vgm_sample_rate = sample_rate != nullptr
+		? sample_rate->GetUnsignedValue() : 44100;
+
+	switch(vgm_sample_rate) {
+		case 44100: break;
+		case 48000: break;
+		case 88200: break;
+		case 96000: break;
+		default: vgm_sample_rate = 44100;
+	}
+
+	vgm_bit_depth = bit_depth != nullptr
+		? bit_depth->GetUnsignedValue() : 16;
+
+	switch(vgm_bit_depth) {
+		case 16: {
+			vgm_bit_shift = 8;
+			vgm_byte_width = 2;
+			break;
+		}
+		case 24: {
+			vgm_bit_shift = 0;
+			vgm_byte_width = 4;
+			break;
+		}
+		default: {
+			vgm_bit_depth = 16;
+			vgm_bit_shift = 8;
+			vgm_byte_width = 2;
+			break;
+		}
+	}
+	
+	vgm_fade_len = fade_len != nullptr
+		? fade_len->GetUnsignedValue() : 8;
+
+	return true;
+}
 
 static void
 vgm_stream_decode(DecoderClient &client, InputStream &is)
 {
 	PlayerBase *player;
 	DATA_LOADER *loader;
-	uint8_t *data;
-	player = LoadVgm(is,&loader,&data);
+	uint8_t *vgm_data;
+	size_t packed_size;
+
+	player = LoadVgm(is,&loader,&vgm_data);
 	if(player == nullptr) return;
 
 	AtScopeExit(loader) {
@@ -150,8 +210,8 @@ vgm_stream_decode(DecoderClient &client, InputStream &is)
 		DataLoader_Deinit(loader);
 	};
 
-	AtScopeExit(data) {
-		free(data);
+	AtScopeExit(vgm_data) {
+		free(vgm_data);
 	};
 
 	AtScopeExit(player) {
@@ -161,53 +221,55 @@ vgm_stream_decode(DecoderClient &client, InputStream &is)
 
 	player->Start();
 
-	uint64_t total_samples = (uint64_t)player->Tick2Sample(player->GetTotalPlayTicks(2));
-	unsigned int samples_fade = 0;
+	packed_size = VGM_BUFFER_SAMPLES * vgm_byte_width;
+
+	uint64_t total_frames = (uint64_t)player->Tick2Sample(player->GetTotalPlayTicks(2));
+	unsigned int frames_fade = 0;
 	if(player->GetLoopTicks()) {
-		samples_fade = (VGM_SAMPLE_RATE * VGM_FADE_LEN);
-		total_samples += samples_fade;
+		frames_fade = (vgm_sample_rate * vgm_fade_len);
+		total_frames += frames_fade;
 	}
-	
-	uint64_t samples = total_samples;
-	uint64_t millis  = total_samples;
+
+	uint64_t frames = total_frames;
+	uint64_t millis  = total_frames;
 	millis *= 1000;
-	millis /= VGM_SAMPLE_RATE;
+	millis /= vgm_sample_rate;
 
 	const SignedSongTime song_len = SignedSongTime::FromMS(millis);
 
-	const auto audio_format = CheckAudioFormat(VGM_SAMPLE_RATE,
-							SampleFormat::S16,
+	const auto audio_format = CheckAudioFormat(vgm_sample_rate,
+							vgm_bit_depth == 16 ? SampleFormat::S16 : SampleFormat::S24_P32,
 							VGM_CHANNELS);
 	client.Ready(audio_format, true, song_len);
 
 	DecoderCommand cmd;
 	do {
-		WAVE_32BS buffer[VGM_BUFFER_SAMPLES];
-		int16_t  packed[VGM_BUFFER_SAMPLES * VGM_CHANNELS];
+		WAVE_32BS buffer[VGM_BUFFER_FRAMES];
+		int32_t  packed[VGM_BUFFER_SAMPLES];
 
 		memset(buffer,0,sizeof(buffer));
 		memset(packed,0,sizeof(packed));
 
-		unsigned int fc = samples > VGM_BUFFER_SAMPLES ? VGM_BUFFER_SAMPLES : samples;
+		unsigned int fc = frames > VGM_BUFFER_FRAMES ? VGM_BUFFER_FRAMES : frames;
 		player->Render(fc,buffer);
-		FadeSamples(buffer,samples,samples_fade,fc);
-		PackSamples(packed,buffer,fc);
-		samples -= fc;
+		FadeFrames(buffer,frames,frames_fade,fc);
+		PackFrames(packed,buffer,fc);
+		frames -= fc;
 
-		cmd = client.SubmitData(nullptr,packed,sizeof(packed),0);
+		cmd = client.SubmitData(nullptr,packed,packed_size,0);
 		if(cmd == DecoderCommand::SEEK) {
 			uint64_t where = client.GetSeekTime().ToMS();
-			where *= VGM_SAMPLE_RATE;
+			where *= vgm_sample_rate;
 			where /= 1000;
 			if(player->Seek(PLAYPOS_SAMPLE,where)) {
 				client.SeekError();
 			} else {
-				samples = total_samples - where;
+				frames = total_frames - where;
 				client.CommandFinished();
 			}
 		}
 
-		if(samples == 0) break;
+		if(frames == 0) break;
 	} while (cmd != DecoderCommand::STOP);
 
 }
@@ -217,8 +279,8 @@ vgm_scan_stream(InputStream &is, TagHandler &handler) noexcept
 {
 	PlayerBase *player;
 	DATA_LOADER *loader;
-	uint8_t *data;
-	player = LoadVgm(is,&loader,&data);
+	uint8_t *vgm_data;
+	player = LoadVgm(is,&loader,&vgm_data);
 	if(player == nullptr) return false;
 
 	AtScopeExit(loader) {
@@ -226,8 +288,8 @@ vgm_scan_stream(InputStream &is, TagHandler &handler) noexcept
 		DataLoader_Deinit(loader);
 	};
 
-	AtScopeExit(data) {
-		free(data);
+	AtScopeExit(vgm_data) {
+		free(vgm_data);
 	};
 
 	AtScopeExit(player) {
@@ -251,14 +313,14 @@ vgm_scan_stream(InputStream &is, TagHandler &handler) noexcept
 			handler.OnTag(TAG_COMMENT,t[1]);
 	}
 
-	uint64_t samples = (uint64_t)player->Tick2Sample(player->GetTotalPlayTicks(2));
+	uint64_t frames = (uint64_t)player->Tick2Sample(player->GetTotalPlayTicks(2));
 	if(player->GetLoopTicks()) {
-		samples += (VGM_SAMPLE_RATE * VGM_FADE_LEN);
+		frames += (vgm_sample_rate * vgm_fade_len);
 	}
 
-	uint64_t millis = samples;
+	uint64_t millis = frames;
 	millis *= 1000;
-	millis /= VGM_SAMPLE_RATE;
+	millis /= vgm_sample_rate;
 
 	handler.OnDuration(SongTime::FromMS(millis));
 
@@ -272,7 +334,7 @@ static const char *const vgm_suffixes[] = {
 
 const struct DecoderPlugin vgm_decoder_plugin = {
 	"vgm",
-	nullptr,
+	vgm_plugin_init,
 	nullptr,
 	vgm_stream_decode,
 	nullptr,
