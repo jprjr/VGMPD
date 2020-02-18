@@ -123,6 +123,14 @@ if libsndfile_dep.found()
   decoder_plugins_sources += 'SndfileDecoderPlugin.cxx'
 endif
 
+libspc_dep = c_compiler.find_library('spc', required: get_option('spc'))
+libid666_dep = c_compiler.find_library('id666', required: get_option('spc'))
+libspc_found = libspc_dep.found() and libid666_dep.found()
+conf.set('ENABLE_SPC', libspc_found)
+if libspc_found
+  decoder_plugins_sources += 'SpcDecoderPlugin.cxx'
+endif
+
 # libvgm (currently) just installs static libraries, meaning we
 # need to find dependencies on our own.
 
@@ -217,6 +225,13 @@ if libvgm_found
 	if libvgm_has_ext_iconv == true and libvgm_has_native_iconv == false
 		decoder_dependencies += [ libvgm_iconv_dep ]
 	endif
+endif
+
+if libspc_found
+	decoder_dependencies += [
+	  libspc_dep,
+	  libid666_dep,
+	]
 endif
 
 decoder_plugins = static_library(
