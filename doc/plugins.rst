@@ -473,6 +473,20 @@ sndfile
 
 Decodes WAV and AIFF files using `libsndfile <http://www.mega-nerd.com/libsndfile/>`_.
 
+spc
+---
+
+SNES SPC emulator based on `snes_spc <https://github.com/jprjr/snes_spc>`_.
+
+.. list-table::
+   :widths: 20 80
+   :header-rows: 1
+
+   * - Setting
+     - Description
+   * - **gain**
+     - Sets the gain applied to SPC output. Default is 256.
+
 
 vgm
 ---
