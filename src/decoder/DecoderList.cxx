@@ -48,6 +48,7 @@
 #include "plugins/FluidsynthDecoderPlugin.hxx"
 #include "plugins/SidplayDecoderPlugin.hxx"
 #include "plugins/SpcDecoderPlugin.hxx"
+#include "plugins/NsfplayDecoderPlugin.hxx"
 #include "util/Macros.hxx"
 #include "util/RuntimeError.hxx"
 
@@ -110,6 +111,9 @@ const struct DecoderPlugin *const decoder_plugins[] = {
 #endif
 #ifdef ENABLE_FFMPEG
 	&ffmpeg_decoder_plugin,
+#endif
+#ifdef ENABLE_NSFPLAY
+	&nsfplay_decoder_plugin,
 #endif
 #ifdef ENABLE_SPC
 	&spc_decoder_plugin,

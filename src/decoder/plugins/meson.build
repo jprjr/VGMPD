@@ -117,6 +117,12 @@ if libmpg123_dep.found()
   decoder_plugins_sources += 'Mpg123DecoderPlugin.cxx'
 endif
 
+libnsfplay_dep = c_compiler.find_library('nsfplay', required: get_option('nsfplay'))
+conf.set('ENABLE_NSFPLAY', libnsfplay_dep.found())
+if libnsfplay_dep.found()
+	decoder_plugins_sources += 'NsfplayDecoderPlugin.cxx'
+endif
+
 libsndfile_dep = dependency('sndfile', required: get_option('sndfile'))
 conf.set('ENABLE_SNDFILE', libsndfile_dep.found())
 if libsndfile_dep.found()
@@ -205,6 +211,7 @@ decoder_dependencies = [
     libmodplug_dep,
     libmpcdec_dep,
     libmpg123_dep,
+	libnsfplay_dep,
     libopus_dep,
     libsidplay_dep,
     libsndfile_dep,
