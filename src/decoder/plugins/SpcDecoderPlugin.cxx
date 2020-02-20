@@ -169,8 +169,6 @@ spc_stream_decode(DecoderClient &client, InputStream &is)
 	uint64_t frames_fade = (uint64_t)id6->fade;
 	frames_fade /= 2;
 
-	total_frames += frames_fade;
-
 	uint64_t frames = total_frames;
 
 	uint64_t millis = total_frames;
@@ -265,8 +263,6 @@ spc_scan_stream(InputStream &is, TagHandler &handler) noexcept
 
 	uint64_t frames_fade = (uint64_t)id6->fade;
 	frames_fade /= 2;
-
-	total_frames += frames_fade;
 
 	uint64_t millis = total_frames;
 	millis *= 1000;
