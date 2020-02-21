@@ -16,6 +16,24 @@
 
 #include <cstring>
 
+/* extension to xgm::NSFPlayerConfig to load from a ConfigBlock */
+class NSFPlayerConfigPlugin : public xgm::NSFPlayerConfig
+{
+	public:
+	NSFPlayerConfigPlugin() : NSFPlayerConfig() {}
+	~NSFPlayerConfigPlugin() {}
+	void Load(const ConfigBlock& block) {
+		std::map<std::string, vcm::Value>::iterator it;
+		for(it=data.begin(); it != data.end(); it++) {
+			auto param = block.GetBlockParam(it->first.c_str());
+			if(param != nullptr) {
+				data[it->first.c_str()] = param->GetUnsignedValue();
+			}
+		}
+	}
+};
+
+
 #define SUBTUNE_PREFIX "tune_"
 
 static constexpr Domain nsfplay_domain("nsfplay");
@@ -30,11 +48,7 @@ struct NsfplayContainerPath {
 	unsigned track;
 };
 
-static unsigned nsfplay_gain;
-static unsigned nsfplay_sample_rate;
-static unsigned nsfplay_default_length;
-static unsigned nsfplay_default_fade;
-static unsigned nsfplay_default_loops;
+static NSFPlayerConfigPlugin nsfplay_config;
 
 gcc_pure
 static unsigned
@@ -59,7 +73,7 @@ ParseContainerPath(Path path_fs)
 	const Path base = path_fs.GetBase();
 	unsigned track;
 	if (base.IsNull() ||
-	    (track = ParseSubtuneName(base.c_str())) < 1)
+		(track = ParseSubtuneName(base.c_str())) < 1)
 		return { AllocatedPath(path_fs), 0 };
 
 	return { path_fs.GetDirectoryName(), track - 1 };
@@ -76,9 +90,9 @@ LoadNSF(Path path_fs)
 		return nullptr;
 	}
 
-	nsf->SetDefaults(nsfplay_default_length,
-		nsfplay_default_fade,
-		nsfplay_default_loops);
+	nsf->SetDefaults(nsfplay_config["PLAY_TIME"],
+		nsfplay_config["FADE_TIME"],
+		nsfplay_config["LOOP_NUM"]);
 
 	return nsf;
 }
@@ -86,15 +100,22 @@ LoadNSF(Path path_fs)
 static bool
 nsfplay_plugin_init(const ConfigBlock &block)
 {
-	auto gain = block.GetBlockParam("gain");
 
-	nsfplay_gain = gain != nullptr
-		? gain->GetUnsignedValue() : 0x100;
+	/* set defaults */
+	nsfplay_config["RATE"]	  = 48000;
+	nsfplay_config["PLAY_TIME"] = 180 * 1000;
+	nsfplay_config["FADE_TIME"] = 8   * 1000;
+	nsfplay_config["LOOP_NUM"]  = 2;
 
-	nsfplay_default_length = 180 * 1000;
-	nsfplay_default_fade   = 8   * 1000;
-	nsfplay_default_loops  = 2;
-	nsfplay_sample_rate    = 48000;
+	nsfplay_config.Load(block);
+
+	/* ensure certain options aren't set */
+	nsfplay_config["BPS"] = 16;
+	nsfplay_config["NCH"] =  NSFPLAY_CHANNELS;
+	nsfplay_config["AUTO_STOP"] = 0'
+	nsfplay_config["AUTO_DETECT"] = 0;
+	nsfplay_config["NSFE_PLAYLIST"] = 1;
+	nsfplay_config["LOG_CPU"] = 0;
 
 	return true;
 }
@@ -105,7 +126,6 @@ nsfplay_file_decode(DecoderClient &client, Path path_fs)
 	const auto container = ParseContainerPath(path_fs);
 	xgm::NSF* nsf;
 	xgm::NSFPlayer* player;
-	xgm::NSFPlayerConfig* config;
 	uint8_t track = 0;
 
 	nsf = LoadNSF(container.path);
@@ -116,18 +136,13 @@ nsfplay_file_decode(DecoderClient &client, Path path_fs)
 	};
 
 	player = new xgm::NSFPlayer();
-	config = new xgm::NSFPlayerConfig();
 
 	AtScopeExit(player) {
 		delete player;
 	};
 
-	AtScopeExit(config) {
-		delete config;
-	};
-
 	if(nsf->nsfe_plst_size > 0) {
-		if(container.track >= nsf->nsfe_plst_size) {
+		if(container.track >= (unsigned)nsf->nsfe_plst_size) {
 			track = nsf->nsfe_plst[nsf->nsfe_plst_size-1];
 		} else {
 			track = nsf->nsfe_plst[container.track];
@@ -140,22 +155,20 @@ nsfplay_file_decode(DecoderClient &client, Path path_fs)
 
 	const int length = nsf->GetLength();
 	uint64_t total_frames = (uint64_t)length;
-	total_frames *= nsfplay_sample_rate;
+	total_frames *= nsfplay_config["RATE"];
 	total_frames /= 1000;
 	uint64_t frames = total_frames;
 
-	(*config)["MASTER_VOLUME"] = nsfplay_gain;
-
-	player->SetConfig(config);
+	player->SetConfig(&nsfplay_config);
 	if(!player->Load(nsf)) {
 		return;
 	}
 
 	player->SetChannels(NSFPLAY_CHANNELS);
-	player->SetPlayFreq(nsfplay_sample_rate);
+	player->SetPlayFreq(nsfplay_config["RATE"]);
 	player->Reset();
 
-	const auto audio_format = CheckAudioFormat(nsfplay_sample_rate,
+	const auto audio_format = CheckAudioFormat(nsfplay_config["RATE"],
 							SampleFormat::S16,
 							NSFPLAY_CHANNELS);
 	client.Ready(audio_format,true,SongTime::FromMS(length));
@@ -172,7 +185,7 @@ nsfplay_file_decode(DecoderClient &client, Path path_fs)
 		cmd = client.SubmitData(nullptr,buffer,sizeof(buffer),0);
 		if(cmd == DecoderCommand::SEEK) {
 			uint64_t where = client.GetSeekTime().ToMS();
-			where *= nsfplay_sample_rate;
+			where *= nsfplay_config["RATE"];
 			where /= 1000;
 
 			uint64_t cur = total_frames - frames;
@@ -197,7 +210,7 @@ ScanMusic(xgm::NSF *nsf, unsigned track, TagHandler &handler) noexcept
 	unsigned int track_max;
 	if(nsf->nsfe_plst_size > 0) {
 		track_max = nsf->nsfe_plst_size;
-		if(track >= nsf->nsfe_plst_size) {
+		if(track >= (unsigned)nsf->nsfe_plst_size) {
 			nsfe_track = nsf->nsfe_plst[nsf->nsfe_plst_size-1];
 		} else {
 			nsfe_track = nsf->nsfe_plst[track];

@@ -466,6 +466,23 @@ Decodes MP3 files using `libmpg123 <http://www.mpg123.de/>`_. Currently, this
 decoder does not support streams (e.g. archived files, remote files over HTTP,
 ...), only regular local files.
 
+nsfplay
+-------
+
+Video game music file emulator based on `NSFPlay <https://github.com/bbbradsmith/nsfplay>`_.
+
+It uses the same setting names as NSFPlug's ini files. For example, to set the internal plugin volume and same rate, use a configuration block like:
+
+.. code-block:: none
+
+    decoder {
+        plugin "nsfplay"
+        MASTER_VOLUME "192"
+        RATE "48000
+    }
+
+For all available NSFPlay settings, check the `NSFPlay settings reference <https://github.com/bbbradsmith/nsfplay/blob/master/distribute/nsfplay.txt>`_.
+
 opus
 ----
 
