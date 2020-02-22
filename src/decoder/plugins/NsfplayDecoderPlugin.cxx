@@ -112,7 +112,7 @@ nsfplay_plugin_init(const ConfigBlock &block)
 	/* ensure certain options aren't set */
 	nsfplay_config["BPS"] = 16;
 	nsfplay_config["NCH"] =  NSFPLAY_CHANNELS;
-	nsfplay_config["AUTO_STOP"] = 0'
+	nsfplay_config["AUTO_STOP"] = 0;
 	nsfplay_config["AUTO_DETECT"] = 0;
 	nsfplay_config["NSFE_PLAYLIST"] = 1;
 	nsfplay_config["LOG_CPU"] = 0;
