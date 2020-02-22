@@ -23,9 +23,9 @@ static constexpr signed VGM_MIN_SAMPLE = -8388608;
 
 static unsigned vgm_sample_rate;
 static unsigned vgm_bit_depth;
-static unsigned vgm_bit_shift;
 static unsigned vgm_byte_width;
 static unsigned vgm_fade_len;
+static void (*PackFrames)(void *dest, WAVE_32BS *src, unsigned int count);
 
 static void
 FadeFrames(WAVE_32BS *data, unsigned int frames_rem, unsigned int frames_fade, unsigned int frame_count) {
@@ -52,11 +52,11 @@ FadeFrames(WAVE_32BS *data, unsigned int frames_rem, unsigned int frames_fade, u
 }
 
 static void
-PackFrames(void *dest, WAVE_32BS *src, unsigned int count) {
+PackFrames16(void *d, WAVE_32BS *src, unsigned int count) {
 	unsigned int i = 0;
 	unsigned int j = 0;
-	int32_t *dest_32 = (int32_t *)dest;
-	int16_t *dest_16 = (int16_t *)dest;
+	int16_t *dest = (int16_t *)d;
+
 	while(i<count) {
 
 		/* check for clipping */
@@ -71,16 +71,35 @@ PackFrames(void *dest, WAVE_32BS *src, unsigned int count) {
 			src[i].R = VGM_MAX_SAMPLE;
 		}
 
-		src[i].L >>= vgm_bit_shift;
-		src[i].R >>= vgm_bit_shift;
+		dest[j]   = (int16_t)((uint32_t)src[i].L >> 8);
+		dest[j+1] = (int16_t)((uint32_t)src[i].R >> 8);
 
-		if(vgm_bit_depth == 16) {
-			dest_16[j]    = (int16_t)src[i].L;
-			dest_16[j+1]  = (int16_t)src[i].R;
-		} else {
-			dest_32[j]    = src[i].L;
-			dest_32[j+1]  = src[i].R;
+		i++;
+		j+=2;
+	}
+}
+
+static void
+PackFrames24(void *d, WAVE_32BS *src, unsigned int count) {
+	unsigned int i = 0;
+	unsigned int j = 0;
+	int32_t *dest = (int32_t *)d;
+	while(i<count) {
+
+		/* check for clipping */
+		if(src[i].L < VGM_MIN_SAMPLE) {
+			src[i].L = VGM_MIN_SAMPLE;
+		} else if(src[i].L > VGM_MAX_SAMPLE) {
+			src[i].L = VGM_MAX_SAMPLE;
 		}
+		if(src[i].R < VGM_MIN_SAMPLE) {
+			src[i].R = VGM_MIN_SAMPLE;
+		} else if(src[i].R > VGM_MAX_SAMPLE) {
+			src[i].R = VGM_MAX_SAMPLE;
+		}
+
+		dest[j]    = src[i].L;
+		dest[j+1]  = src[i].R;
 
 		i++;
 		j+=2;
@@ -158,31 +177,23 @@ vgm_plugin_init(const ConfigBlock &block)
 	vgm_sample_rate = sample_rate != nullptr
 		? sample_rate->GetUnsignedValue() : 44100;
 
-	switch(vgm_sample_rate) {
-		case 44100: break;
-		case 48000: break;
-		case 88200: break;
-		case 96000: break;
-		default: vgm_sample_rate = 44100;
-	}
-
 	vgm_bit_depth = bit_depth != nullptr
 		? bit_depth->GetUnsignedValue() : 16;
 
 	switch(vgm_bit_depth) {
 		case 16: {
-			vgm_bit_shift = 8;
+			PackFrames = PackFrames16;
 			vgm_byte_width = 2;
 			break;
 		}
 		case 24: {
-			vgm_bit_shift = 0;
+			PackFrames = PackFrames24;
 			vgm_byte_width = 4;
 			break;
 		}
 		default: {
+			PackFrames = PackFrames16;
 			vgm_bit_depth = 16;
-			vgm_bit_shift = 8;
 			vgm_byte_width = 2;
 			break;
 		}
