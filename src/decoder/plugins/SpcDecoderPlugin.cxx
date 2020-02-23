@@ -8,8 +8,7 @@
 #include "Log.hxx"
 
 #include <id666/id666.h>
-#include <snes_spc/SNES_SPC.h>
-#include <snes_spc/SPC_Filter.h>
+#include <snes_spc/spc.h>
 
 #include <cstring>
 #include <cstdio>
@@ -103,12 +102,12 @@ spc_plugin_init(const ConfigBlock &block)
 static void
 spc_stream_decode(DecoderClient &client, InputStream &is)
 {
-	SNES_SPC *spc;
-	SPC_Filter *filter;
+	snes_spc_t *spc;
+	spc_filter_t *filter;
 	id666 *id6;
 	uint8_t *spc_data;
 	size_t spc_size;
-	blargg_err_t err;
+	spc_err_t err;
 
 	spc_data = LoadStream(is,&spc_size);
 	if(spc_data == nullptr) return;
@@ -124,35 +123,31 @@ spc_stream_decode(DecoderClient &client, InputStream &is)
 		free(id6);
 	};
 
-	spc = new SNES_SPC;
+	spc = spc_new();
+	if(spc == nullptr) return;
 
 	AtScopeExit(spc) {
-		delete spc;
+		spc_delete(spc);
 	};
 
-	filter = new SPC_Filter;
+	filter = spc_filter_new();
+	if(filter == nullptr) return;
 
 	AtScopeExit(filter) {
-		delete filter;
+		spc_filter_delete(filter);
 	};
 
 	if(id666_parse(id6,spc_data, spc_size)) return;
 	
-	err = spc->init();
+	err = spc_load_spc(spc,spc_data, spc_size);
 	if(err != nullptr) {
 		LogWarning(spc_domain,err);
 		return;
 	}
 
-	err = spc->load_spc(spc_data, spc_size);
-	if(err != nullptr) {
-		LogWarning(spc_domain,err);
-		return;
-	}
-
-	spc->clear_echo();
-	filter->clear();
-	filter->set_gain(spc_gain);
+	spc_clear_echo(spc);
+	spc_filter_clear(filter);
+	spc_filter_set_gain(filter,spc_gain);
 
 	/* total_len is in 1/64000 sec (a "tick").
 	 * samplerate is 32000.
@@ -173,11 +168,11 @@ spc_stream_decode(DecoderClient &client, InputStream &is)
 
 	uint64_t millis = total_frames;
 	millis *= 1000;
-	millis /= SNES_SPC::sample_rate;
+	millis /= spc_sample_rate;
 
 	const SongTime song_len = SongTime::FromMS(millis);
 
-	const auto audio_format = CheckAudioFormat(SNES_SPC::sample_rate,
+	const auto audio_format = CheckAudioFormat(spc_sample_rate,
 								SampleFormat::S16,
 								SPC_CHANNELS);
 	client.Ready(audio_format, true, song_len);
@@ -188,25 +183,24 @@ spc_stream_decode(DecoderClient &client, InputStream &is)
 		memset(buffer,0,sizeof(buffer));
 
 		unsigned int fc = frames > SPC_BUFFER_FRAMES ? SPC_BUFFER_FRAMES : frames;
-		spc->play(fc * 2,buffer);
-		filter->run(buffer, fc * 2);
+		spc_play(spc,fc * 2,buffer);
+		spc_filter_run(filter,buffer, fc * 2);
 		FadeFrames(buffer,frames,frames_fade,fc);
 		frames -= fc;
 
 		cmd = client.SubmitData(nullptr,buffer,sizeof(buffer),0);
 		if(cmd == DecoderCommand::SEEK) {
 			uint64_t where = client.GetSeekTime().ToMS();
-			where *= SNES_SPC::sample_rate;
+			where *= spc_sample_rate;
 			where /= 1000;
 
 			uint64_t cur = total_frames - frames;
 
 			if(where > cur) {
-				spc->skip((where - cur) * 2);
+				spc_skip(spc,(where - cur) * 2);
 			} else {
-			    spc->init();
-				spc->load_spc(spc_data,spc_size);
-				spc->skip(where * 2);
+				spc_load_spc(spc,spc_data,spc_size);
+				spc_skip(spc,where * 2);
 			}
 			frames = total_frames - where;
 			client.CommandFinished();
@@ -266,7 +260,7 @@ spc_scan_stream(InputStream &is, TagHandler &handler) noexcept
 
 	uint64_t millis = total_frames;
 	millis *= 1000;
-	millis /= SNES_SPC::sample_rate;
+	millis /= spc_sample_rate;
 
 	const SongTime song_len = SongTime::FromMS(millis);
 
