@@ -126,7 +126,6 @@ nsfplay_file_decode(DecoderClient &client, Path path_fs)
 	const auto container = ParseContainerPath(path_fs);
 	xgm::NSF* nsf;
 	xgm::NSFPlayer* player;
-	uint8_t track = 0;
 
 	nsf = LoadNSF(container.path);
 	if(nsf == nullptr) return;
@@ -141,17 +140,7 @@ nsfplay_file_decode(DecoderClient &client, Path path_fs)
 		delete player;
 	};
 
-	if(nsf->nsfe_plst_size > 0) {
-		if(container.track >= (unsigned)nsf->nsfe_plst_size) {
-			track = nsf->nsfe_plst[nsf->nsfe_plst_size-1];
-		} else {
-			track = nsf->nsfe_plst[container.track];
-		}
-	} else {
-		track = container.track;
-	}
-
-	nsf->SetSong(track);
+	nsf->SetSong(container.track);
 
 	const int length = nsf->GetLength();
 	uint64_t total_frames = (uint64_t)length;
@@ -208,6 +197,7 @@ ScanMusic(xgm::NSF *nsf, unsigned track, TagHandler &handler) noexcept
 {
 	uint8_t nsfe_track;
 	unsigned int track_max;
+
 	if(nsf->nsfe_plst_size > 0) {
 		track_max = nsf->nsfe_plst_size;
 		if(track >= (unsigned)nsf->nsfe_plst_size) {
@@ -219,7 +209,8 @@ ScanMusic(xgm::NSF *nsf, unsigned track, TagHandler &handler) noexcept
 		nsfe_track = track;
 		track_max = nsf->GetSongNum();
 	}
-	nsf->SetSong(nsfe_track);
+
+	nsf->SetSong(track);
 
 	handler.OnDuration(SongTime::FromMS(nsf->GetLength()));
 	handler.OnTag(TAG_TRACK, StringFormat<16>("%u",track + 1));
