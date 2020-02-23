@@ -146,7 +146,7 @@ nsfplay_file_decode(DecoderClient &client, Path path_fs)
 	uint64_t total_frames = (uint64_t)length;
 	total_frames *= nsfplay_config["RATE"];
 	total_frames /= 1000;
-	uint64_t frames = total_frames;
+	uint64_t frames = 0;
 
 	player->SetConfig(&nsfplay_config);
 	if(!player->Load(nsf)) {
@@ -167,9 +167,8 @@ nsfplay_file_decode(DecoderClient &client, Path path_fs)
 		int16_t buffer[NSFPLAY_BUFFER_SAMPLES];
 		memset(buffer,0,sizeof(buffer));
 		
-		unsigned int fc = frames > NSFPLAY_BUFFER_FRAMES ? NSFPLAY_BUFFER_FRAMES : frames;
-		player->Render(buffer,fc);
-		frames -= fc;
+		player->Render(buffer,NSFPLAY_BUFFER_FRAMES);
+		frames += NSFPLAY_BUFFER_FRAMES;
 
 		cmd = client.SubmitData(nullptr,buffer,sizeof(buffer),0);
 		if(cmd == DecoderCommand::SEEK) {
@@ -177,18 +176,18 @@ nsfplay_file_decode(DecoderClient &client, Path path_fs)
 			where *= nsfplay_config["RATE"];
 			where /= 1000;
 
-			uint64_t cur = total_frames - frames;
-			if(where > cur) {
-				player->Skip(where - cur);
+			if(where > frames) {
+				player->Skip(where - frames);
 			} else {
 				player->Reset();
 				player->Skip(where);
 			}
-			frames = total_frames - where;
+			frames = where;
 			client.CommandFinished();
 		}
 
-		if(frames == 0) break;
+		if(player->IsStopped()) break;
+
 	} while(cmd != DecoderCommand::STOP);
 }
 
