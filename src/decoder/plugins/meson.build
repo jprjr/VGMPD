@@ -153,7 +153,7 @@ endif
 libvgm_player_dep = c_compiler.find_library('vgm-player', required: get_option('vgm'))
 libvgm_emu_dep = c_compiler.find_library('vgm-emu', required: get_option('vgm'))
 libvgm_utils_dep = c_compiler.find_library('vgm-utils', required: get_option('vgm'))
-libvgm_iconv_dep = c_compiler.find_library('iconv', required: get_option('vgm'))
+libvgm_iconv_dep = c_compiler.find_library('iconv', required: false)
 libvgm_has_native_iconv = c_compiler.has_function('iconv_open', prefix: '#include <iconv.h>')
 libvgm_has_ext_iconv = c_compiler.has_function('iconv_open', prefix: '#include <iconv.h>', dependencies: [ libvgm_iconv_dep ])
 
