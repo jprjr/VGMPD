@@ -33,6 +33,8 @@
 #include "util/Domain.hxx"
 #include "Log.hxx"
 
+#include "config.h"
+
 #include <gme/gme.h>
 
 #include <assert.h>
@@ -58,6 +60,10 @@ struct GmeContainerPath {
 static int gme_accuracy;
 #endif
 
+#ifdef ENABLE_GME_KODE54
+static unsigned gme_fade;
+#endif
+
 static bool
 gme_plugin_init(gcc_unused const ConfigBlock &block)
 {
@@ -66,6 +72,12 @@ gme_plugin_init(gcc_unused const ConfigBlock &block)
 	gme_accuracy = accuracy != nullptr
 		? (int)accuracy->GetBoolValue()
 		: -1;
+#endif
+#ifdef ENABLE_GME_KODE54
+	auto fade = block.GetBlockParam("fade");
+	gme_fade = fade != nullptr
+		? (int)fade->GetUnsignedValue()
+		: 8000;
 #endif
 
 	return true;
@@ -165,10 +177,17 @@ gme_file_decode(DecoderClient &client, Path path_fs)
 	}
 
 	const int length = ti->play_length;
+#ifdef ENABLE_GME_KODE54
+	const int fade   = ti->fade_length;
+#endif
 	gme_free_info(ti);
 
 	const SignedSongTime song_len = length > 0
+#ifdef ENABLE_GME_KODE54
+		? SignedSongTime::FromMS(length + (fade >= 0 ? fade : gme_fade))
+#else
 		? SignedSongTime::FromMS(length)
+#endif
 		: SignedSongTime::Negative();
 
 	/* initialize the MPD decoder */
@@ -184,7 +203,12 @@ gme_file_decode(DecoderClient &client, Path path_fs)
 		LogWarning(gme_domain, gme_err);
 
 	if (length > 0)
+#ifdef ENABLE_GME_KODE54
+		if(fade != 0)
+			gme_set_fade(emu, length, fade != -1 ? fade : gme_fade);
+#else
 		gme_set_fade(emu, length);
+#endif
 
 	/* play */
 	DecoderCommand cmd;
@@ -217,7 +241,11 @@ ScanGmeInfo(const gme_info_t &info, unsigned song_num, int track_count,
 	    TagHandler &handler) noexcept
 {
 	if (info.play_length > 0)
+#ifdef ENABLE_GME_KODE54
+		handler.OnDuration(SongTime::FromMS(info.play_length + (info.fade_length >= 0 ? info.fade_length : gme_fade)));
+#else
 		handler.OnDuration(SongTime::FromMS(info.play_length));
+#endif
 
 	if (track_count > 1)
 		handler.OnTag(TAG_TRACK, StringFormat<16>("%u", song_num + 1));
