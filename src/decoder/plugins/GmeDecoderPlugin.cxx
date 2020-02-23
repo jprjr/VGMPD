@@ -35,6 +35,8 @@
 #include "util/Domain.hxx"
 #include "Log.hxx"
 
+#include "config.h"
+
 #include <gme/gme.h>
 
 #include <cassert>
@@ -60,6 +62,10 @@ struct GmeContainerPath {
 static int gme_accuracy;
 #endif
 static unsigned gme_default_fade;
+
+#ifdef ENABLE_GME_KODE54
+static unsigned gme_fade;
+#endif
 
 static bool
 gme_plugin_init([[maybe_unused]] const ConfigBlock &block)

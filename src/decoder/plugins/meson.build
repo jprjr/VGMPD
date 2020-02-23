@@ -85,6 +85,9 @@ libgme_dep = c_compiler.find_library('gme', required: get_option('gme'))
 decoder_features.set('ENABLE_GME', libgme_dep.found())
 if libgme_dep.found()
   decoder_plugins_sources += 'GmeDecoderPlugin.cxx'
+  if get_option('gme_kode54').enabled()
+    conf.set('ENABLE_GME_KODE54',true)
+  endif
 endif
 
 libmad_dep = c_compiler.find_library('mad', required: get_option('mad'))

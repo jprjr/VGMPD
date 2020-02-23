@@ -147,6 +147,8 @@ option('vorbis', type: 'feature', description: 'Vorbis decoder plugin')
 option('wavpack', type: 'feature', description: 'WavPack decoder plugin')
 option('wildmidi', type: 'feature', description: 'WildMidi decoder plugin')
 
+option('gme_kode54', type: 'feature', description: 'Use Kode54 fork of libgme', value: 'disabled')
+
 #
 # Encoder plugins
 #
