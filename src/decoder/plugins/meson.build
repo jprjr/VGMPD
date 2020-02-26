@@ -85,7 +85,10 @@ libgme_dep = c_compiler.find_library('gme', required: get_option('gme'))
 conf.set('ENABLE_GME', libgme_dep.found())
 if libgme_dep.found()
   decoder_plugins_sources += 'GmeDecoderPlugin.cxx'
-  if get_option('gme_kode54').enabled()
+  gme_code = '''#include <gme/gme.h>
+  void func() { gme_set_fade((gme_t *)0, 0, 0); }
+  '''
+  if compiler.compiles(gme_code, name: 'gme: check for 3-argument set_fade')
     conf.set('ENABLE_GME_KODE54',true)
   endif
 endif
@@ -140,26 +143,10 @@ if libspc_found
   decoder_plugins_sources += 'SpcDecoderPlugin.cxx'
 endif
 
-# libvgm (currently) just installs static libraries, meaning we
-# need to find dependencies on our own.
-
-# There's three main static libs - player, emu, utils.
-# Utils requires zlib on all platforms.
-# Utils requires iconv on non-Windows. If on Windows, it
-# uses iconv if available, falls back to win32
-
-# Need to check for libiconv on osx, and maybe other platforms.
-
 libvgm_player_dep = c_compiler.find_library('vgm-player', required: get_option('vgm'))
-libvgm_emu_dep = c_compiler.find_library('vgm-emu', required: get_option('vgm'))
 libvgm_utils_dep = c_compiler.find_library('vgm-utils', required: get_option('vgm'))
-libvgm_iconv_dep = c_compiler.find_library('iconv', required: false)
-libvgm_has_native_iconv = c_compiler.has_function('iconv_open', prefix: '#include <iconv.h>')
-libvgm_has_ext_iconv = c_compiler.has_function('iconv_open', prefix: '#include <iconv.h>', dependencies: [ libvgm_iconv_dep ])
-
-libvgm_found = libvgm_player_dep.found() and libvgm_emu_dep.found() and libvgm_utils_dep.found() and zlib_dep.found() and( is_windows or (libvgm_has_ext_iconv or libvgm_has_native_iconv) )
-conf.set('ENABLE_VGM', libvgm_found)
-if libvgm_found
+conf.set('ENABLE_VGM', libvgm_player_dep.found() and libvgm_utils_dep.found())
+if libvgm_player_dep.found() and libvgm_utils_dep.found()
   decoder_plugins_sources += 'VgmDecoderPlugin.cxx'
 endif
 
@@ -227,24 +214,14 @@ decoder_dependencies = [
     libopus_dep,
     libsidplay_dep,
     libsndfile_dep,
+    libvgm_player_dep,
+    libvgm_utils_dep,
     libvorbis_dep,
     libvorbisidec_dep,
     ogg_dep,
     wavpack_dep,
     wildmidi_dep,
 ]
-
-if libvgm_found
-	decoder_dependencies += [
-	  libvgm_emu_dep,
-	  libvgm_player_dep,
-	  libvgm_utils_dep,
-	  zlib_dep,
-	]
-	if libvgm_has_ext_iconv == true and libvgm_has_native_iconv == false
-		decoder_dependencies += [ libvgm_iconv_dep ]
-	endif
-endif
 
 if libspc_found
 	decoder_dependencies += [
