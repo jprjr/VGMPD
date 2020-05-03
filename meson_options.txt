@@ -148,6 +148,8 @@ option('vorbis', type: 'feature', description: 'Vorbis decoder plugin')
 option('wavpack', type: 'feature', description: 'WavPack decoder plugin')
 option('wildmidi', type: 'feature', description: 'WildMidi decoder plugin')
 
+option('gme_sgc', type: 'boolean', value: false, description: 'Game Music Emulator - enable SGC decoding')
+
 #
 # Encoder plugins
 #
