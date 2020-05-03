@@ -59,10 +59,7 @@ struct GmeContainerPath {
 #if GME_VERSION >= 0x000600
 static int gme_accuracy;
 #endif
-
-#ifdef ENABLE_GME_KODE54
-static unsigned gme_fade;
-#endif
+static unsigned gme_default_fade;
 
 static bool
 gme_plugin_init(gcc_unused const ConfigBlock &block)
@@ -73,12 +70,10 @@ gme_plugin_init(gcc_unused const ConfigBlock &block)
 		? (int)accuracy->GetBoolValue()
 		: -1;
 #endif
-#ifdef ENABLE_GME_KODE54
 	auto fade = block.GetBlockParam("fade");
-	gme_fade = fade != nullptr
-		? (int)fade->GetUnsignedValue()
+	gme_default_fade = fade != nullptr
+		? (int)fade->GetUnsignedValue() * 1000
 		: 8000;
-#endif
 
 	return true;
 }
@@ -181,17 +176,16 @@ gme_file_decode(DecoderClient &client, Path path_fs)
 	}
 
 	const int length = ti->play_length;
-#ifdef ENABLE_GME_KODE54
+#ifdef ENABLE_GME_FADE3
 	const int fade   = ti->fade_length;
+#else
+	const int fade   = -1;
 #endif
 	gme_free_info(ti);
 
 	const SignedSongTime song_len = length > 0
-#ifdef ENABLE_GME_KODE54
-		? SignedSongTime::FromMS(length + (fade >= 0 ? fade : gme_fade))
-#else
-		? SignedSongTime::FromMS(length)
-#endif
+		? SignedSongTime::FromMS(length +
+			(fade == -1 ? gme_default_fade : fade))
 		: SignedSongTime::Negative();
 
 	/* initialize the MPD decoder */
@@ -206,10 +200,10 @@ gme_file_decode(DecoderClient &client, Path path_fs)
 	if (gme_err != nullptr)
 		LogWarning(gme_domain, gme_err);
 
-	if (length > 0)
+	if (length > 0 && fade != 0)
 		gme_set_fade(emu, length
-#if GME_SET_FADE_3
-			     , 8000
+#ifdef ENABLE_GME_FADE3
+			     , fade == -1 ? gme_default_fade : fade
 #endif
 			     );
 
@@ -244,11 +238,11 @@ ScanGmeInfo(const gme_info_t &info, unsigned song_num, int track_count,
 	    TagHandler &handler) noexcept
 {
 	if (info.play_length > 0)
-#ifdef ENABLE_GME_KODE54
-		handler.OnDuration(SongTime::FromMS(info.play_length + (info.fade_length >= 0 ? info.fade_length : gme_fade)));
-#else
-		handler.OnDuration(SongTime::FromMS(info.play_length));
+		handler.OnDuration(SongTime::FromMS(info.play_length
+#ifdef ENABLE_GME_FADE3
+			+ (info.fade_length == -1 ? gme_default_fade : info.fade_length)
 #endif
+		));
 
 	if (track_count > 1)
 		handler.OnTag(TAG_TRACK, StringFormat<16>("%u", song_num + 1));
