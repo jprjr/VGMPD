@@ -86,10 +86,11 @@ conf.set('ENABLE_GME', libgme_dep.found())
 if libgme_dep.found()
   decoder_plugins_sources += 'GmeDecoderPlugin.cxx'
   gme_code = '''#include <gme/gme.h>
-  void func() { gme_set_fade((gme_t *)0, 0, 0); }
+  #include <stddef.h>
+  void func() { gme_set_fade(NULL, 0, 0); }
   '''
-  if compiler.compiles(gme_code, name: 'gme: check for 3-argument set_fade')
-    conf.set('ENABLE_GME_KODE54',true)
+  if c_compiler.compiles(gme_code, name: 'gme: check for 3-argument set_fade')
+    conf.set('ENABLE_GME_FADE3',true)
   endif
 endif
 
