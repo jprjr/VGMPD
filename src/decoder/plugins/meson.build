@@ -92,6 +92,9 @@ if libgme_dep.found()
   if c_compiler.compiles(gme_code, name: 'gme: check for 3-argument set_fade')
     conf.set('ENABLE_GME_FADE3',true)
   endif
+  if get_option('gme_sgc')
+	conf.set('ENABLE_GME_SGC',true)
+  endif
 endif
 
 libmad_dep = c_compiler.find_library('mad', required: get_option('mad'))
