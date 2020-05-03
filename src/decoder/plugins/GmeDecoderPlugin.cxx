@@ -348,7 +348,7 @@ gme_container_scan(Path path_fs)
 static const char *const gme_suffixes[] = {
 	"ay", "gbs", "gym", "hes", "kss", "nsf",
 	"nsfe", "rsn", "sap", "spc", "vgm", "vgz",
-#ifdef ENABLE_GME_KODE54
+#ifdef ENABLE_GME_SGC
 	"sgc",
 #endif
 	nullptr
