@@ -143,10 +143,9 @@ if libspc_found
   decoder_plugins_sources += 'SpcDecoderPlugin.cxx'
 endif
 
-libvgm_player_dep = c_compiler.find_library('vgm-player', required: get_option('vgm'))
-libvgm_utils_dep = c_compiler.find_library('vgm-utils', required: get_option('vgm'))
-conf.set('ENABLE_VGM', libvgm_player_dep.found() and libvgm_utils_dep.found())
-if libvgm_player_dep.found() and libvgm_utils_dep.found()
+libvgm_player_dep = dependency('vgm-player', static: true)
+conf.set('ENABLE_VGM', libvgm_player_dep.found())
+if libvgm_player_dep.found()
   decoder_plugins_sources += 'VgmDecoderPlugin.cxx'
 endif
 
