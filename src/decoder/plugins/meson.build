@@ -93,7 +93,7 @@ if libgme_dep.found()
     conf.set('ENABLE_GME_FADE3',true)
   endif
   if get_option('gme_sgc')
-	conf.set('ENABLE_GME_SGC',true)
+    conf.set('ENABLE_GME_SGC',true)
   endif
 endif
 
@@ -130,7 +130,7 @@ endif
 libnsfplay_dep = c_compiler.find_library('nsfplay', required: get_option('nsfplay'))
 conf.set('ENABLE_NSFPLAY', libnsfplay_dep.found())
 if libnsfplay_dep.found()
-	decoder_plugins_sources += 'NsfplayDecoderPlugin.cxx'
+  decoder_plugins_sources += 'NsfplayDecoderPlugin.cxx'
 endif
 
 libsndfile_dep = dependency('sndfile', required: get_option('sndfile'))
@@ -151,6 +151,14 @@ libvgm_player_dep = dependency('vgm-player', static: true, required: get_option(
 conf.set('ENABLE_VGM', libvgm_player_dep.found())
 if libvgm_player_dep.found()
   decoder_plugins_sources += 'VgmDecoderPlugin.cxx'
+endif
+
+libpsflib_dep = c_compiler.find_library('psflib', required: get_option('lazyusf'))
+liblazyusf_dep = c_compiler.find_library('lazyusf', required: get_option('lazyusf'))
+lazyusf_found = libpsflib_dep.found() and liblazyusf_dep.found()
+conf.set('ENABLE_LAZYUSF', lazyusf_found)
+if lazyusf_found
+  decoder_plugins_sources += 'LazyusfDecoderPlugin.cxx'
 endif
 
 wavpack_dep = dependency('wavpack', required: get_option('wavpack'))
@@ -213,7 +221,7 @@ decoder_dependencies = [
     libmodplug_dep,
     libmpcdec_dep,
     libmpg123_dep,
-	libnsfplay_dep,
+    libnsfplay_dep,
     libopus_dep,
     libsidplay_dep,
     libsndfile_dep,
@@ -226,10 +234,17 @@ decoder_dependencies = [
 ]
 
 if libspc_found
-	decoder_dependencies += [
-	  libspc_dep,
-	  libid666_dep,
-	]
+    decoder_dependencies += [
+        libspc_dep,
+        libid666_dep,
+    ]
+endif
+
+if lazyusf_found
+    decoder_dependencies += [
+        liblazyusf_dep,
+        libpsflib_dep,
+    ]
 endif
 
 decoder_plugins = static_library(
