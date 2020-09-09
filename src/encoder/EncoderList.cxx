@@ -29,6 +29,7 @@
 #include "plugins/ShineEncoderPlugin.hxx"
 #include "plugins/LameEncoderPlugin.hxx"
 #include "plugins/TwolameEncoderPlugin.hxx"
+#include "plugins/technicallyflac/TechnicallyFlacEncoderPlugin.hxx"
 #include "decoder/Features.h"
 
 #include <string.h>
@@ -55,6 +56,9 @@ const EncoderPlugin *const encoder_plugins[] = {
 #endif
 #ifdef ENABLE_SHINE
 	&shine_encoder_plugin,
+#endif
+#ifdef ENABLE_TECHNICALLYFLAC
+	&technicallyflac_encoder_plugin,
 #endif
 	nullptr
 };
