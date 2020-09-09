@@ -20,11 +20,11 @@ my code isn't terrible.
     * requires [nsfplay](https://github.com/bbbradsmith/nsfplay)
 * New SPC decoder plugin for spc chiptunes:
     * requires [snes_spc](https://github.com/jprjr/snes_spc.git) and [libid666](https://github.com/jprjr/libid666)
-    * supports loading from http URLs, zip files, etc.
+    * supports loading from archives/streams supported my MPD (not just local files).
 * New VGM decoder plugin for vgm chiptunes:
     * requires [libvgm](https://github.com/ValleyBell/libvgm)
     * supports newer versions of VGM than the GME plugin.
-    * supports loading from http URLs, zip files, etc.
+    * supports loading from archives/streams supported my MPD (not just local files).
 * New [technicallyflac](https://github.com/jprjr/technicallyflac) encoder plugin:
     * Produces an Ogg stream with FLAC data.
     * Not actually compressed.
