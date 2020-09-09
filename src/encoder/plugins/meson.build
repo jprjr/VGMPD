@@ -2,6 +2,11 @@ encoder_plugins_sources = [
   'NullEncoderPlugin.cxx',
 ]
 
+if libogg_dep.found()
+  encoder_plugins_sources += 'technicallyflac/TechnicallyFlacEncoderPlugin.cxx'
+  conf.set('ENABLE_TECHNICALLYFLAC', true)
+endif
+
 conf.set('ENABLE_FLAC_ENCODER', flac_dep.found())
 if flac_dep.found()
   encoder_plugins_sources += 'FlacEncoderPlugin.cxx'
