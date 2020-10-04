@@ -6,7 +6,7 @@ with added plugins specifically for playing videogame music.
 I'll warn you up front - I'm not really a C++ programmer. Hopefully
 my code isn't terrible.
 
-**Current Release Branch**: `v0.21.25-vgmpd`
+**Current Release Branch**: `v0.21.26-vgmpd`
 
 ## Changes from upstream
 
