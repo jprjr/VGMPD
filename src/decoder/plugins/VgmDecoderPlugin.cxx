@@ -109,9 +109,9 @@ PackFrames24(void *d, WAVE_32BS *src, unsigned int count) {
 static bool
 GetPlayerForFile(DATA_LOADER *loader, PlayerBase** retPlayer) {
 	PlayerBase *player;
-	if(!VGMPlayer::IsMyFile(loader)) player = new VGMPlayer();
-	else if(!S98Player::IsMyFile(loader)) player = new S98Player();
-	else if(!DROPlayer::IsMyFile(loader)) player = new DROPlayer();
+	if(!VGMPlayer::PlayerCanLoadFile(loader)) player = new VGMPlayer();
+	else if(!S98Player::PlayerCanLoadFile(loader)) player = new S98Player();
+	else if(!DROPlayer::PlayerCanLoadFile(loader)) player = new DROPlayer();
 	else return false;
 	if(player->LoadFile(loader)) {
 		delete player;
