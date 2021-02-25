@@ -1,6 +1,6 @@
 #include "NsfplayDecoderPlugin.hxx"
 #include "../DecoderAPI.hxx"
-#include "CheckAudioFormat.hxx"
+#include "pcm/CheckAudioFormat.hxx"
 #include "song/DetachedSong.hxx"
 #include "tag/Handler.hxx"
 #include "tag/Builder.hxx"
@@ -8,6 +8,7 @@
 #include "fs/AllocatedPath.hxx"
 #include "util/ScopeExit.hxx"
 #include "util/StringFormat.hxx"
+#include "util/StringView.hxx"
 #include "util/UriUtil.hxx"
 #include "util/Domain.hxx"
 #include "Log.hxx"
@@ -212,7 +213,7 @@ ScanMusic(xgm::NSF *nsf, unsigned track, TagHandler &handler) noexcept
 	nsf->SetSong(track);
 
 	handler.OnDuration(SongTime::FromMS(nsf->GetLength()));
-	handler.OnTag(TAG_TRACK, StringFormat<16>("%u",track + 1));
+	handler.OnTag(TAG_TRACK, StringFormat<16>("%u",track + 1).c_str());
 
 	if(nsf->artist[0])
 		handler.OnTag(TAG_ARTIST,nsf->artist);
@@ -230,7 +231,7 @@ ScanMusic(xgm::NSF *nsf, unsigned track, TagHandler &handler) noexcept
 					nsf->title,
 					track+1,
 					track_max);
-			handler.OnTag(TAG_TITLE,title);
+			handler.OnTag(TAG_TITLE,title.c_str());
 		}
 	}
 
@@ -268,7 +269,7 @@ nsfplay_container_scan(Path path_fs)
 	const unsigned total = nsf->nsfe_plst_size > 0
 		? nsf->nsfe_plst_size : nsf->songs;
 
-	const char *subtune_suffix = uri_get_suffix(path_fs.c_str());
+	const auto *subtune_suffix = path_fs.GetSuffix();
 
 	TagBuilder tag_builder;
 
@@ -289,15 +290,9 @@ static const char *const nsfplay_suffixes[] = {
 	"nsf", "nsfe", nullptr
 };
 
-const struct DecoderPlugin nsfplay_decoder_plugin = {
-	"nsfplay",
-	nsfplay_plugin_init,
-	nullptr,
-	nullptr,
-	nsfplay_file_decode,
-	nsfplay_scan_file,
-	nullptr,
-	nsfplay_container_scan,
-	nsfplay_suffixes,
-	nullptr,
-};
+constexpr DecoderPlugin nsfplay_decoder_plugin =
+	DecoderPlugin("nsfplay", nsfplay_file_decode, nsfplay_scan_file)
+    .WithInit(nsfplay_plugin_init)
+    .WithContainer(nsfplay_container_scan)
+    .WithSuffixes(nsfplay_suffixes);
+
