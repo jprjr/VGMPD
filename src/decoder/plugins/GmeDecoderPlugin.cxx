@@ -35,8 +35,6 @@
 #include "util/Domain.hxx"
 #include "Log.hxx"
 
-#include "config.h"
-
 #include <gme/gme.h>
 
 #include <cassert>
@@ -249,17 +247,16 @@ ScanGmeInfo(const gme_info_t &info, unsigned song_num, int track_count,
 	if (track_count > 1)
 		handler.OnTag(TAG_TRACK, StringFormat<16>("%u", song_num + 1).c_str());
 
-	if (!StringIsEmpty(info.song))
-		handler.OnTag(TAG_TITLE, info.song);
-	else {
-		if (!StringIsEmpty(info.game) && track_count > 1) {
+	if (!StringIsEmpty(info.song)) {
+		if (track_count > 1) {
 			/* start numbering subtunes from 1 */
 			const auto tag_title =
 				StringFormat<1024>("%s (%u/%d)",
-						   info.game, song_num + 1,
+						   info.song, song_num + 1,
 						   track_count);
 			handler.OnTag(TAG_TITLE, tag_title.c_str());
-		}
+		} else
+			handler.OnTag(TAG_TITLE, info.song);
 	}
 
 	if (!StringIsEmpty(info.author))
@@ -348,9 +345,6 @@ gme_container_scan(Path path_fs)
 static const char *const gme_suffixes[] = {
 	"ay", "gbs", "gym", "hes", "kss", "nsf",
 	"nsfe", "sap", "spc", "vgm", "vgz",
-#ifdef ENABLE_GME_SGC
-	"sgc",
-#endif
 	nullptr
 };
 

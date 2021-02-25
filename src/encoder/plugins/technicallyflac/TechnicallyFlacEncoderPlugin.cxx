@@ -95,10 +95,10 @@ class PreparedTechnicallyFlacEncoder final : public PreparedEncoder {
 	unsigned int frame_size_ms;
 
 public:
-	PreparedTechnicallyFlacEncoder(const ConfigBlock &block);
+	explicit PreparedTechnicallyFlacEncoder(const ConfigBlock &block);
 	Encoder *Open(AudioFormat &audio_format) override;
 
-	const char *GetMimeType() const override {
+	[[nodiscard]] const char *GetMimeType() const noexcept override {
 		return "audio/ogg";
 	}
 };
@@ -168,11 +168,11 @@ void
 TechnicallyFlacEncoder::GenerateHead()
 {
 	uint8_t header[51];
-	tf_membuffer tmp = {
-		.pos = 13,
-		.len = 51,
-		.buf = header,
-	};
+	tf_membuffer tmp;
+
+	tmp.pos = 13;
+	tmp.len = 51;
+	tmp.buf = header;
 
 	tmp.buf[0] = 0x7F;
 	tmp.buf[1] = 'F';
@@ -260,11 +260,10 @@ TechnicallyFlacEncoder::GenerateTags(const Tag *tag)
 	}
 	assert(comments + comments_size == p);
 
-	tf_membuffer tmp = {
-		.pos = 0,
-		.len = 4 + comments_size,
-		.buf = metadata_block
-	};
+	tf_membuffer tmp;
+	tmp.pos = 0;
+	tmp.len = 4 + comments_size;
+	tmp.buf = metadata_block;
 
 	enc->userdata = &tmp;
 	technicallyflac_metadata_block(enc,1,4,comments,comments_size);
