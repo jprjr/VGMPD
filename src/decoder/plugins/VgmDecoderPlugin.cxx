@@ -1,8 +1,9 @@
 #include "VgmDecoderPlugin.hxx"
 #include "../DecoderAPI.hxx"
-#include "CheckAudioFormat.hxx"
+#include "pcm/CheckAudioFormat.hxx"
 #include "input/InputStream.hxx"
 #include "tag/Handler.hxx"
+#include "util/StringView.hxx"
 #include "util/ScopeExit.hxx"
 
 #include <vgm/player/playerbase.hpp>
@@ -343,15 +344,7 @@ static const char *const vgm_suffixes[] = {
 	nullptr
 };
 
-const struct DecoderPlugin vgm_decoder_plugin = {
-	"vgm",
-	vgm_plugin_init,
-	nullptr,
-	vgm_stream_decode,
-	nullptr,
-	nullptr,
-	vgm_scan_stream,
-	nullptr,
-	vgm_suffixes,
-	nullptr,
-};
+constexpr DecoderPlugin vgm_decoder_plugin =
+    DecoderPlugin("vgm",vgm_stream_decode,vgm_scan_stream)
+    .WithInit(vgm_plugin_init)
+    .WithSuffixes(vgm_suffixes);

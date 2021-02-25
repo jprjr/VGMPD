@@ -1,8 +1,9 @@
 #include "SpcDecoderPlugin.hxx"
 #include "../DecoderAPI.hxx"
-#include "CheckAudioFormat.hxx"
+#include "pcm/CheckAudioFormat.hxx"
 #include "input/InputStream.hxx"
 #include "tag/Handler.hxx"
+#include "util/StringView.hxx"
 #include "util/ScopeExit.hxx"
 #include "util/Domain.hxx"
 #include "Log.hxx"
@@ -273,15 +274,7 @@ static const char *const spc_suffixes[] = {
 	"spc", nullptr,
 };
 
-const struct DecoderPlugin spc_decoder_plugin = {
-	"spc",
-	spc_plugin_init,
-	nullptr,
-	spc_stream_decode,
-	nullptr,
-	nullptr,
-	spc_scan_stream,
-	nullptr,
-	spc_suffixes,
-	nullptr,
-};
+constexpr DecoderPlugin spc_decoder_plugin =
+    DecoderPlugin("spc", spc_stream_decode, spc_scan_stream)
+    .WithInit(spc_plugin_init)
+    .WithSuffixes(spc_suffixes);

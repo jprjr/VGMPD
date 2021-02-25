@@ -227,7 +227,6 @@ decoder_dependencies = [
     libsndfile_dep,
     vorbis_dep,
     libvgm_player_dep,
-    libvgm_utils_dep,
     ogg_dep,
     wavpack_dep,
     wildmidi_dep,
