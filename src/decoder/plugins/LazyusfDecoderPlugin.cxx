@@ -3,13 +3,14 @@
 #include "config.h"
 #include "LazyusfDecoderPlugin.hxx"
 #include "../DecoderAPI.hxx"
-#include "CheckAudioFormat.hxx"
+#include "pcm/CheckAudioFormat.hxx"
 #include "tag/Handler.hxx"
 #include "tag/Builder.hxx"
 #include "fs/Path.hxx"
 #include "util/ScopeExit.hxx"
 #include "util/Domain.hxx"
 #include "util/StringFormat.hxx"
+#include "util/StringView.hxx"
 #include "Log.hxx"
 
 #include <psflib.h>
@@ -53,7 +54,7 @@ FadeUSFSample(int16_t s, int32_t n, int32_t d)
 }
 
 /**
- * parses H:M:S into seconds
+ * parses H:M:S into milliseconds
  */
 gcc_pure
 static unsigned
@@ -62,12 +63,18 @@ ParseUSFTime(const char *ts)
 	unsigned int i = 0;
 	unsigned int t = 0;
 	unsigned int c = 0;
+	unsigned int m = 1000;
 	for(i=0;i<strlen(ts);i++)
 	{
 		if(ts[i] == ':')
 		{
 			t *= 60;
 			t += c*60;
+			c = 0;
+		}
+		else if(ts[i] == '.') {
+			m = 1;
+			t += c;
 			c = 0;
 		}
 		else
@@ -77,7 +84,7 @@ ParseUSFTime(const char *ts)
 				return 0;
 			}
 			c *= 10;
-			c += ts[i] - 48;
+			c += (ts[i] - 48) * m;
 		}
 	}
 	return c + t;
@@ -131,11 +138,14 @@ static psf_file_callbacks LazyUSF_psf_callbacks =
 
 struct LazyUSF_TagHolder
 {
-	unsigned int length;
-	unsigned int fade;
-	unsigned int enable_compare;
-	unsigned int enable_fifo_full;
-	TagHandler &handler;
+	unsigned int length = 0;
+	unsigned int fade = 0;
+	unsigned int enable_compare = 0;
+	unsigned int enable_fifo_full = 0;
+	TagHandler *handler = nullptr;
+	LazyUSF_TagHolder(TagHandler *h) {
+		handler = h;
+	}
 };
 
 static int
@@ -145,27 +155,27 @@ LazyUSF_TagHandler(void *context, const char *name, const char *value)
 
 	if(strcasecmp(name,"title") == 0)
 	{
-		holder->handler.OnTag(TAG_TITLE,value);
+		holder->handler->OnTag(TAG_TITLE,value);
 	} else if(strcasecmp(name,"artist") == 0)
 	{
-		holder->handler.OnTag(TAG_ARTIST,value);
+		holder->handler->OnTag(TAG_ARTIST,value);
 	} else if(strcasecmp(name,"game") == 0)
 	{
-		holder->handler.OnTag(TAG_ALBUM,value);
+		holder->handler->OnTag(TAG_ALBUM,value);
 	} else if(strcasecmp(name,"year") == 0)
 	{
-		holder->handler.OnTag(TAG_DATE,value);
+		holder->handler->OnTag(TAG_DATE,value);
 	} else if(strcasecmp(name,"track") == 0)
 	{
-		holder->handler.OnTag(TAG_TRACK,value);
+		holder->handler->OnTag(TAG_TRACK,value);
 	}
 
 	if(strcasecmp(name,"length") == 0)
 	{
-		holder->length = ParseUSFTime(value) * 1000;
+		holder->length = ParseUSFTime(value);
 	} else if(strcasecmp(name,"fade") == 0)
 	{
-		holder->fade = ParseUSFTime(value) * 1000;
+		holder->fade = ParseUSFTime(value);
 	} else if(strcasecmp(name,"_enablecompare") == 0 && strlen(value)) {
 		holder->enable_compare = 1;
 	} else if(strcasecmp(name,"_enablefifofull") == 0 && strlen(value)) {
@@ -194,11 +204,6 @@ LazyUSF_openfile(void *context, Path path_fs,
 
 	usf_clear(usf);
 
-	holder->length = 0;
-	holder->fade = 0;
-	holder->enable_compare = 0;
-	holder->enable_fifo_full = 0;
-
 	if(psf_load(path_fs.c_str(),
 	  &LazyUSF_psf_callbacks, 0x21,
 	  LazyUSF_Loader, usf,
@@ -215,7 +220,7 @@ LazyUSF_openfile(void *context, Path path_fs,
 
 	if(holder->length > 0)
 	{
-		holder->handler.OnDuration(
+		holder->handler->OnDuration(
 				SongTime::FromMS(holder->length + holder->fade));
 	}
 
@@ -264,14 +269,7 @@ lazyusf_plugin_init(const ConfigBlock &block)
 static bool
 lazyusf_scan_file(Path path_fs, TagHandler &handler)
 {
-	struct LazyUSF_TagHolder holder =
-	{
-		.length = 0,
-		.fade = 0,
-		.enable_compare = 0,
-		.enable_fifo_full = 0,
-		.handler = handler,
-	};
+	struct LazyUSF_TagHolder holder(&handler);
 
 	usf_state_t *usf =
 		(usf_state_t *)malloc(usf_get_state_size());
@@ -295,14 +293,8 @@ lazyusf_file_decode(DecoderClient &client, Path path_fs)
 {
 	TagBuilder tag_builder;
 	AddTagHandler h(tag_builder);
-	struct LazyUSF_TagHolder holder =
-	{
-		.length = 0,
-		.fade = 0,
-		.enable_compare = 0,
-		.enable_fifo_full = 0,
-		.handler = h,
-	};
+	struct LazyUSF_TagHolder holder(&h);
+
 	const char *usf_err = nullptr;
 	int8_t resample = true;
 
@@ -348,8 +340,8 @@ lazyusf_file_decode(DecoderClient &client, Path path_fs)
 
 	DecoderCommand cmd;
 	int16_t buf[LAZYUSF_BUFFER_SAMPLES];
-	int64_t song_samples = (holder.length / 1000) * sample_rate;
-	int64_t fade_samples = (holder.fade / 1000) * sample_rate;
+	int64_t song_samples = (int64_t)((((uint64_t)holder.length) * sample_rate) / 1000);
+	int64_t fade_samples = (int64_t)((((uint64_t)holder.fade) * sample_rate) / 1000);
 	int64_t rem_samples = fade_samples;
 
 	do
@@ -381,12 +373,12 @@ lazyusf_file_decode(DecoderClient &client, Path path_fs)
 		if (cmd == DecoderCommand::SEEK)
 		{
 
-			int64_t where = (holder.length - client.GetSeekTime().ToMS()) / 1000 * sample_rate;
+			int64_t where = (int64_t)((((uint64_t)holder.length - client.GetSeekTime().ToMS()) * sample_rate) / 1000);
 
 			if(where > song_samples) {
 				usf_restart(usf);
-				song_samples = (holder.length / 1000) * sample_rate;
-				fade_samples = (holder.fade / 1000) * sample_rate;
+				song_samples = (int64_t)((((uint64_t)holder.length) * sample_rate) / 1000);
+				fade_samples = (int64_t)((((uint64_t)holder.fade) * sample_rate) / 1000);
 				rem_samples = fade_samples;
 			}
 
@@ -416,16 +408,7 @@ static const char *const lazyusf_suffixes[] = {
 	"miniusf", nullptr
 };
 
-const struct DecoderPlugin lazyusf_decoder_plugin = {
-	"lazyusf", /* name */
-	lazyusf_plugin_init,   /* init function */
-	nullptr,   /* finish function */
-	nullptr,   /* stream_decode */
-	lazyusf_file_decode,   /* file_decode */
-	lazyusf_scan_file,   /* scan_file */
-	nullptr,   /* scan_stream */
-	nullptr,   /* container_scan */
-	lazyusf_suffixes,
-	nullptr,
-};
-
+constexpr DecoderPlugin lazyusf_decoder_plugin =
+	DecoderPlugin("lazyusf", lazyusf_file_decode, lazyusf_scan_file)
+	.WithInit(lazyusf_plugin_init)
+	.WithSuffixes(lazyusf_suffixes);
