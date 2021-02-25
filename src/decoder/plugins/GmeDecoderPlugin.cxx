@@ -35,6 +35,7 @@
 #include "util/Domain.hxx"
 #include "Log.hxx"
 
+#include "config.h"
 #include <gme/gme.h>
 
 #include <cassert>
@@ -176,7 +177,7 @@ gme_file_decode(DecoderClient &client, Path path_fs)
 	}
 
 	const int length = ti->play_length;
-#if GME_VERSION >= 0x000700
+#ifdef ENABLE_GME_FADE3
 	const int fade   = ti->fade_length;
 #else
 	const int fade   = -1;
@@ -202,7 +203,7 @@ gme_file_decode(DecoderClient &client, Path path_fs)
 
 	if (length > 0 && fade != 0)
 		gme_set_fade(emu, length
-#if GME_VERSION >= 0x000700
+#ifdef ENABLE_GME_FADE3
 			     , fade == -1 ? gme_default_fade : fade
 #endif
 			     );
@@ -239,7 +240,7 @@ ScanGmeInfo(const gme_info_t &info, unsigned song_num, int track_count,
 {
 	if (info.play_length > 0)
 		handler.OnDuration(SongTime::FromMS(info.play_length
-#if GME_VERSION >= 0x000700
+#ifdef ENABLE_GME_FADE3
 			+ (info.fade_length == -1 ? gme_default_fade : info.fade_length)
 #endif
 			));
@@ -346,6 +347,9 @@ gme_container_scan(Path path_fs)
 static const char *const gme_suffixes[] = {
 	"ay", "gbs", "gym", "hes", "kss", "nsf",
 	"nsfe", "rsn", "sap", "spc", "vgm", "vgz",
+#ifdef ENABLE_GME_SGC
+    "sgc",
+#endif
 	nullptr
 };
 

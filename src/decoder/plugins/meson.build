@@ -92,7 +92,16 @@ if libgme_dep.found()
   if c_compiler.compiles(gme_code, name: 'gme: check for 3-argument set_fade')
     conf.set('ENABLE_GME_FADE3',true)
   endif
-  if get_option('gme_sgc')
+  gme_sgc_code = '''
+  #include <gme/gme.h>
+  int main(void) {
+    unsigned char header[4] = { 'S', 'G', 'C', 0x1A };
+    const char *type = gme_identify_header(header);
+    return !type[0];
+  }
+  '''
+  sgc_result = c_compiler.run(gme_sgc_code, dependencies: libgme_dep, name: 'gme: check for SGC support')
+  if sgc_result.returncode() == 0
     conf.set('ENABLE_GME_SGC',true)
   endif
 endif
