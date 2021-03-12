@@ -85,25 +85,6 @@ libgme_dep = c_compiler.find_library('gme', required: get_option('gme'))
 decoder_features.set('ENABLE_GME', libgme_dep.found())
 if libgme_dep.found()
   decoder_plugins_sources += 'GmeDecoderPlugin.cxx'
-  gme_code = '''#include <gme/gme.h>
-  #include <stddef.h>
-  void func() { gme_set_fade(NULL, 0, 0); }
-  '''
-  if c_compiler.compiles(gme_code, name: 'gme: check for 3-argument set_fade')
-    conf.set('ENABLE_GME_FADE3',true)
-  endif
-  gme_sgc_code = '''
-  #include <gme/gme.h>
-  int main(void) {
-    unsigned char header[4] = { 'S', 'G', 'C', 0x1A };
-    const char *type = gme_identify_header(header);
-    return !type[0];
-  }
-  '''
-  sgc_result = c_compiler.run(gme_sgc_code, dependencies: libgme_dep, name: 'gme: check for SGC support')
-  if sgc_result.returncode() == 0
-    conf.set('ENABLE_GME_SGC',true)
-  endif
 endif
 
 libmad_dep = c_compiler.find_library('mad', required: get_option('mad'))
