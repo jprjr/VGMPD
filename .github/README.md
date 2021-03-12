@@ -6,14 +6,11 @@ with added plugins specifically for playing videogame music.
 I'll warn you up front - I'm not really a C++ programmer. Hopefully
 my code isn't terrible.
 
-**Current Release Branch**: `v0.21.26-vgmpd`
+**Current Release Branch**: [`v0.22.6-vgmpd`](https://github.com/jprjr/VGMPD/tree/v0.22.6-vgmpd)
 
 ## Changes from upstream
 
-* Game Music Emu plugin: support [Kode54's fork](https://git.lopez-snowhill.net/chris/game_music_emu) (vgmplay branch)
-    * support for more VGM chipsets and SGC files.
 * Game Music Emu plugin: remove track number from track titles.
-* Game Music Emu plugin: load SGC files (if using Kode54's fork).
 * New LazyUSF decoder plugin for Nintendo 64 music in `.miniusf` format:
     * requires [psflib](https://git.lopez-snowhill.net/chris/psflib) and [lazyusf2](https://git.lopez-snowhill.net/chris/lazyusf2)
 * New NSFPlay decoder plugin for NSF/NSFe/NSF2 chiptunes:
@@ -105,7 +102,7 @@ You'll need meson, ninja, and the usual MPD dependencies (see [MPD user manual: 
 ```bash
 git clone https://github.com/jprjr/VGMPD.git
 cd VGMPD
-git checkout v0.21.25-vgmpd
+git checkout v0.22.6-vgmpd
 meson . output/release --buildtype=debugoptimized -Db_ndebug=true
 ninja -C output/release
 sudo ninja -C output/release install
@@ -166,4 +163,5 @@ NSFPlay uses the same config options that the NSFPlay ini file uses.
 * **sample_rate** - set the internal sample rate, VGM files use 44100 as their base sample rate.
 * **bit_depth** - set the output bit depth, default is 16 bits, but you can go up to 24 bits.
 * **fade_len** - the default fade length in seconds for looping VGM files.
+
 
