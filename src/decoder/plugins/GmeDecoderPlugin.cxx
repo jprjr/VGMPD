@@ -347,6 +347,9 @@ gme_container_scan(Path path_fs)
 static const char *const gme_suffixes[] = {
 	"ay", "gbs", "gym", "hes", "kss", "nsf",
 	"nsfe", "sap", "spc", "vgm", "vgz",
+#if GME_VERSION >= 0x000700
+    "rsn",
+#endif
 	nullptr
 };
 
