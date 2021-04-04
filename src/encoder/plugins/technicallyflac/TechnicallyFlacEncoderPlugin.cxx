@@ -1,6 +1,5 @@
 #include "TechnicallyFlacEncoderPlugin.hxx"
 #include "../OggEncoder.hxx"
-#include "util/Alloc.hxx"
 #include "util/ByteOrder.hxx"
 #include "util/StringUtil.hxx"
 
@@ -99,7 +98,7 @@ TechnicallyFlacEncoder::TechnicallyFlacEncoder(AudioFormat &_audio_format, techn
 	enc(_enc),
     buffer(_buffer),
     bufferlen(_bufferlen),
-	pcm_buffer((int32_t *)xalloc(sizeof(int32_t) * enc->blocksize * enc->channels))
+	pcm_buffer(new int32_t[enc->blocksize * enc->channels])
 {
 	switch(audio_format.format) {
 	case SampleFormat::S8:
@@ -210,9 +209,9 @@ TechnicallyFlacEncoder::GenerateTags(const Tag *tag)
 		}
 	}
 
-	unsigned char *comments = (unsigned char *)xalloc(comments_size);
+	unsigned char *comments = new unsigned char[comments_size];
     uint32_t metadata_len = 4 + comments_size;
-	unsigned char *metadata_block = (unsigned char *)xalloc(metadata_len);
+	unsigned char *metadata_block = new unsigned char[metadata_len];
 	unsigned char *p = comments;
 
 	*(uint32_t *)(comments) = ToLE32(version_length);
@@ -257,8 +256,8 @@ TechnicallyFlacEncoder::GenerateTags(const Tag *tag)
 	stream.PacketIn(packet);
 	Flush();
 
-	free(comments);
-	free(metadata_block);
+	delete comments;
+	delete metadata_block;
 }
 
 
