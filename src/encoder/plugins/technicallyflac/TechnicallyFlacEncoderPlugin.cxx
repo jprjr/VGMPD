@@ -10,74 +10,64 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-struct tf_membuffer_s {
-	uint32_t pos;
-	uint32_t len;
-	uint8_t *buf;
-};
-
-typedef struct tf_membuffer_s tf_membuffer;
-
-static int
-tf_membuffer_write(uint8_t *bytes, uint32_t len, void *userdata) {
-	tf_membuffer *mem = (tf_membuffer *)userdata;
-	if(mem->pos + len > mem->len) return -1;
-	memcpy(&mem->buf[mem->pos],bytes,len);
-	mem->pos += len;
-	return 0;
-}
-
-typedef unsigned (*pcm_conv)(int32_t *, const void *, unsigned);
+typedef unsigned (*pcm_conv)(int32_t *, const void *, unsigned, unsigned, unsigned, unsigned);
 
 static unsigned
-pcm8_to_pcm32(int32_t *out, const void *_in, unsigned num_samples)
+pcm8_to_pcm32(int32_t *out, const void *_in, unsigned int blocksize, unsigned offset, unsigned num_frames, unsigned channels)
 {
 	const int8_t *in = (const int8_t *)_in;
-	const unsigned r = num_samples;
-	while (num_samples > 0) {
-		*out++ = *in++;
-		--num_samples;
-	}
-	return r;
+    unsigned int i;
+    unsigned int c;
+    for(i=0; i < num_frames; i++) {
+        for(c = 0; c < channels; c++) {
+            out[(c * blocksize) + i + offset] = in[(i*channels)+c];
+        }
+    }
+    return num_frames * channels * sizeof(int8_t);
 }
 
 static unsigned
-pcm16_to_pcm32(int32_t *out, const void *_in, unsigned num_samples)
+pcm16_to_pcm32(int32_t *out, const void *_in, unsigned int blocksize, unsigned offset, unsigned num_frames, unsigned channels)
 {
 	const int16_t *in = (const int16_t *)_in;
-	const unsigned r = num_samples * sizeof(int16_t);
-	while (num_samples > 0) {
-		*out++ = *in++;
-		--num_samples;
-	}
-	return r;
+    unsigned int i;
+    unsigned int c;
+    for(i=0; i < num_frames; i++) {
+        for(c = 0; c < channels; c++) {
+            out[(c * blocksize) + i + offset] = in[(i*channels)+c];
+        }
+    }
+    return num_frames * channels * sizeof(int16_t);
 }
 
 static unsigned
-pcm32_to_pcm32(int32_t *out, const void *_in, unsigned num_samples)
+pcm32_to_pcm32(int32_t *out, const void *_in, unsigned int blocksize, unsigned offset, unsigned num_frames, unsigned channels)
 {
 	const int32_t *in = (const int32_t *)_in;
-	const unsigned r = num_samples * sizeof(int32_t);
-	while (num_samples > 0) {
-		*out++ = *in++;
-		--num_samples;
-	}
-	return r;
+    unsigned int i;
+    unsigned int c;
+    for(i=0; i < num_frames; i++) {
+        for(c = 0; c < channels; c++) {
+            out[(c * blocksize) + i + offset] = in[(i*channels)+c];
+        }
+    }
+    return num_frames * channels * sizeof(int32_t);
 }
 
 class TechnicallyFlacEncoder final : public OggEncoder {
 	const AudioFormat audio_format;
 	technicallyflac *enc;
-	tf_membuffer *mem;
-	int32_t *const buffer;
+    uint8_t* buffer;
+    uint32_t bufferlen;
+	int32_t* pcm_buffer;
+    int32_t* channel_buffer[8];
 	pcm_conv conv;
 	size_t frames_position = 0;
-	size_t samples_position = 0;
 	ogg_int64_t packetno = 0;
 	ogg_int64_t granulepos = 0;
 
 public:
-	TechnicallyFlacEncoder(AudioFormat &_audio_format, technicallyflac *_enc, tf_membuffer *_mem);
+	TechnicallyFlacEncoder(AudioFormat &_audio_format, technicallyflac *_enc, uint8_t *buffer, uint32_t bufferlen);
 	~TechnicallyFlacEncoder() noexcept override;
 
 	void End() override;
@@ -103,12 +93,13 @@ public:
 	}
 };
 
-TechnicallyFlacEncoder::TechnicallyFlacEncoder(AudioFormat &_audio_format, technicallyflac *_enc, tf_membuffer *_mem)
+TechnicallyFlacEncoder::TechnicallyFlacEncoder(AudioFormat &_audio_format, technicallyflac *_enc, uint8_t *_buffer, uint32_t _bufferlen)
 	:OggEncoder(true),
 	audio_format(_audio_format),
 	enc(_enc),
-	mem(_mem),
-	buffer((int32_t *)xalloc(sizeof(int32_t) * enc->blocksize * enc->channels))
+    buffer(_buffer),
+    bufferlen(_bufferlen),
+	pcm_buffer((int32_t *)xalloc(sizeof(int32_t) * enc->blocksize * enc->channels))
 {
 	switch(audio_format.format) {
 	case SampleFormat::S8:
@@ -119,14 +110,16 @@ TechnicallyFlacEncoder::TechnicallyFlacEncoder(AudioFormat &_audio_format, techn
 		conv = pcm32_to_pcm32;
 	}
 	GenerateHeaders(nullptr);
+    for(unsigned int i = 0; i<enc->channels; i++) {
+        channel_buffer[i] = &pcm_buffer[i * enc->blocksize];
+    }
 }
 
 TechnicallyFlacEncoder::~TechnicallyFlacEncoder() noexcept
 {
-	delete mem->buf;
-	delete mem;
 	delete enc;
-	delete buffer;
+	delete pcm_buffer;
+    delete buffer;
 }
 
 void
@@ -141,14 +134,10 @@ TechnicallyFlacEncoder::Write(const void *_data, size_t length)
 		if(nframes > num_frames)
 			nframes = num_frames;
 
-
-		const unsigned nsamples = nframes * audio_format.channels;
-
-		size_t rbytes = conv(&buffer[samples_position],data,nsamples);
+		size_t rbytes = conv(pcm_buffer,data,enc->blocksize,frames_position,nframes,enc->channels);
 
 		length -= rbytes;
 		frames_position  += nframes;
-		samples_position += nsamples;
 		data += rbytes;
 
 		if(frames_position == enc->blocksize) {
@@ -167,41 +156,36 @@ TechnicallyFlacEncoder::GenerateHeaders(const Tag *tag)
 void
 TechnicallyFlacEncoder::GenerateHead()
 {
+    /* 9 bytes of ogg-specific header
+     * 4 bytes for fLaC streammarker
+     * 4 bytes for streaminfo header
+     * 34 bytes for streaminfo */
 	uint8_t header[51];
-	tf_membuffer tmp;
+    uint32_t len;
 
-	tmp.pos = 13;
-	tmp.len = 51;
-	tmp.buf = header;
-
-	tmp.buf[0] = 0x7F;
-	tmp.buf[1] = 'F';
-	tmp.buf[2] = 'L';
-	tmp.buf[3] = 'A';
-	tmp.buf[4] = 'C';
+	header[0] = 0x7F;
+	header[1] = 'F';
+	header[2] = 'L';
+	header[3] = 'A';
+	header[4] = 'C';
 
 	/* 1-byte major version number (1.0) */
-	tmp.buf[5] = 0x01;
+	header[5] = 0x01;
 	/* 1-byte minor version number (1.0) */
-	tmp.buf[6] = 0x00;
+	header[6] = 0x00;
 
 	/* 2-byte, big endian number of header packets (not including first) */
-	tmp.buf[7] = 0x00;
-	tmp.buf[8] = 0x01;
+	header[7] = 0x00;
+	header[8] = 0x01;
 
-	/* 4-byte ascii "fLaC" */
-	tmp.buf[9]  = 'f';
-	tmp.buf[10] = 'L';
-	tmp.buf[11] = 'a';
-	tmp.buf[12] = 'C';
-
-	enc->userdata = &tmp;
-	technicallyflac_streaminfo(enc,0);
-	enc->userdata = mem;
+    len = 51 - 9;
+	technicallyflac_streammarker(enc,&header[9],&len);
+    len = 51 - 13;
+	technicallyflac_streaminfo(enc,&header[13],&len,0);
 
 	ogg_packet packet;
-	packet.packet = tmp.buf;
-	packet.bytes = tmp.len;
+	packet.packet = header;
+	packet.bytes = 51;
 	packet.b_o_s = true;
 	packet.e_o_s = false;
 	packet.granulepos = 0;
@@ -227,7 +211,8 @@ TechnicallyFlacEncoder::GenerateTags(const Tag *tag)
 	}
 
 	unsigned char *comments = (unsigned char *)xalloc(comments_size);
-	unsigned char *metadata_block = (unsigned char *)xalloc(4 + comments_size);
+    uint32_t metadata_len = 4 + comments_size;
+	unsigned char *metadata_block = (unsigned char *)xalloc(metadata_len);
 	unsigned char *p = comments;
 
 	*(uint32_t *)(comments) = ToLE32(version_length);
@@ -260,14 +245,7 @@ TechnicallyFlacEncoder::GenerateTags(const Tag *tag)
 	}
 	assert(comments + comments_size == p);
 
-	tf_membuffer tmp;
-	tmp.pos = 0;
-	tmp.len = 4 + comments_size;
-	tmp.buf = metadata_block;
-
-	enc->userdata = &tmp;
-	technicallyflac_metadata_block(enc,1,4,comments,comments_size);
-	enc->userdata = mem;
+	technicallyflac_metadata(enc,metadata_block,&metadata_len,1,4,comments_size,comments);
 
 	ogg_packet packet;
 	packet.packet = metadata_block;
@@ -288,25 +266,20 @@ void
 TechnicallyFlacEncoder::DoEncode(bool eos)
 {
 	if(frames_position > 0) {
-		int b = technicallyflac_encode_interleaved(enc,buffer,frames_position);
-		if( b < 0 ) {
-			/* throw runtime error */
-		}
+        uint32_t tmp_bufferlen = bufferlen;
+		technicallyflac_frame(enc,buffer,&tmp_bufferlen,frames_position,channel_buffer);
 		granulepos += frames_position;
 
 		ogg_packet packet;
-		packet.packet = mem->buf;
-		packet.bytes  = mem->pos;
+		packet.packet = buffer;
+		packet.bytes  = tmp_bufferlen;
 		packet.b_o_s = false;
 		packet.e_o_s = eos;
 		packet.granulepos = granulepos;
 		packet.packetno = packetno++;
 		stream.PacketIn(packet);
 		frames_position = 0;
-		samples_position = 0;
 	}
-
-	mem->pos = 0;
 }
 
 void
@@ -344,33 +317,28 @@ PreparedTechnicallyFlacEncoder::Open(AudioFormat &audio_format) {
 	}
 
 	technicallyflac *enc = new technicallyflac;
-	tf_membuffer *mem = new tf_membuffer;
-	enc->samplerate = audio_format.sample_rate;
-	enc->channels = audio_format.channels;
-	enc->blocksize = audio_format.sample_rate / ( 1000 / frame_size_ms);
+    uint8_t *buffer;
+    uint32_t bufferlen;
+    uint8_t bitdepth;
+    uint32_t blocksize = audio_format.sample_rate / ( 1000 / frame_size_ms);
 
 	switch(audio_format.format) {
 	case SampleFormat::S8:
-		enc->bitdepth = 8; break;
+		bitdepth = 8; break;
 	case SampleFormat::S16:
-		enc->bitdepth = 16; break;
+		bitdepth = 16; break;
 	case SampleFormat::S24_P32:
-		enc->bitdepth = 24; break;
+		bitdepth = 24; break;
 	default:
 		audio_format.format = SampleFormat::S32;
-		enc->bitdepth = 32;
+		bitdepth = 32;
 	}
 
-	mem->pos = 0;
-	mem->len = technicallyflac_frame_size(enc->channels, enc->bitdepth, enc->blocksize);
-	mem->buf = new uint8_t[mem->len];
+    technicallyflac_init(enc,blocksize,audio_format.sample_rate,audio_format.channels,bitdepth);
+    bufferlen = technicallyflac_size_frame(enc->blocksize,enc->channels,enc->bitdepth);
+    buffer = new uint8_t[bufferlen];
 
-	enc->userdata = mem;
-	enc->write = tf_membuffer_write;
-
-	technicallyflac_init(enc);
-
-	return new TechnicallyFlacEncoder(audio_format, enc, mem);
+	return new TechnicallyFlacEncoder(audio_format, enc, buffer, bufferlen);
 }
 
 
