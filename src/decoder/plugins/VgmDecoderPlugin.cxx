@@ -14,6 +14,7 @@
 #include <vgm/utils/MemoryLoader.h>
 
 #include <cstring>
+#include <cmath>
 
 static constexpr unsigned VGM_CHANNELS = 2;
 static constexpr unsigned VGM_BUFFER_FRAMES = 2048;
@@ -27,6 +28,15 @@ static unsigned vgm_bit_depth;
 static unsigned vgm_byte_width;
 static unsigned vgm_fade_len;
 static void (*PackFrames)(void *dest, WAVE_32BS *src, unsigned int count);
+
+static void
+GainFrames(WAVE_32BS *data, double gain, unsigned int frame_count) {
+	unsigned int i;
+	for(i=0;i<frame_count;i++) {
+		data[i].L *= gain;
+		data[i].R *= gain;
+	}
+}
 
 static void
 FadeFrames(WAVE_32BS *data, unsigned int frames_rem, unsigned int frames_fade, unsigned int frame_count) {
@@ -213,6 +223,7 @@ vgm_stream_decode(DecoderClient &client, InputStream &is)
 	DATA_LOADER *loader;
 	uint8_t *vgm_data;
 	size_t packed_size;
+	double gain = 1.0;
 
 	player = LoadVgm(is,&loader,&vgm_data);
 	if(player == nullptr) return;
@@ -232,6 +243,11 @@ vgm_stream_decode(DecoderClient &client, InputStream &is)
 	};
 
 	player->Start();
+
+	if(player->GetPlayerType() == FCC_VGM) {
+		const VGM_HEADER* vgmhdr = static_cast<VGMPlayer*>(player)->GetFileHeader();
+		gain = pow(2.0, vgmhdr->volumeGain / (double)0x100);
+	}
 
 	packed_size = VGM_BUFFER_SAMPLES * vgm_byte_width;
 
@@ -264,6 +280,7 @@ vgm_stream_decode(DecoderClient &client, InputStream &is)
 
 		unsigned int fc = frames > VGM_BUFFER_FRAMES ? VGM_BUFFER_FRAMES : frames;
 		player->Render(fc,buffer);
+		GainFrames(buffer,gain,fc);
 		FadeFrames(buffer,frames,frames_fade,fc);
 		PackFrames(packed,buffer,fc);
 		frames -= fc;
