@@ -6,7 +6,7 @@ with added plugins specifically for playing videogame music.
 I'll warn you up front - I'm not really a C++ programmer. Hopefully
 my code isn't terrible.
 
-**Current Release Branch**: [`v0.22.6-vgmpd`](https://github.com/jprjr/VGMPD/tree/v0.22.6-vgmpd)
+**Current Release Branch**: [`v0.22.11-vgmpd`](https://github.com/jprjr/VGMPD/tree/v0.22.11-vgmpd)
 
 ## Changes from upstream
 
@@ -102,7 +102,7 @@ You'll need meson, ninja, and the usual MPD dependencies (see [MPD user manual: 
 ```bash
 git clone https://github.com/jprjr/VGMPD.git
 cd VGMPD
-git checkout v0.22.6-vgmpd
+git checkout v0.22.11-vgmpd
 meson . output/release --buildtype=debugoptimized -Db_ndebug=true
 ninja -C output/release
 sudo ninja -C output/release install
